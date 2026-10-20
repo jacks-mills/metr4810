@@ -26,6 +26,7 @@
 #include "robot_state.h"
 #include "task_default.h"
 #include "task_ui.h"
+#include "usb_syscalls.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -107,6 +108,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
+  usb_syscalls_init();     /* must come before USB starts receiving */
   MX_USB_DEVICE_Init();
 
   params.state = &state;
