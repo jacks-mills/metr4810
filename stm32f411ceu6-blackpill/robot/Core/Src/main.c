@@ -23,9 +23,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
-#include <string.h>
-#include "usbd_cdc_if.h"
+#include "robot_state.h"
+#include "task_default.h"
+#include "task_ui.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,7 +35,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,14 +50,23 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for ui */
+osThreadId_t uiHandle;
+const osThreadAttr_t ui_attributes = {
+  .name = "ui",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal7,
+};
 /* USER CODE BEGIN PV */
-
+struct Params params;   /* shared with tasks via their osThreadNew argument */
+struct State state;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-void StartDefaultTask(void *argument);
+extern void TaskDefault(void *argument);
+extern void TaskUI(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -66,40 +74,7 @@ void StartDefaultTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-extern USBD_HandleTypeDef hUsbDeviceFS;
 
-int _write(int file, char *ptr, int len)
-{
-    static uint8_t txbuf[APP_TX_DATA_SIZE];
-
-    // Drop output if no host is connected/enumerated
-    if (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED)
-        return len;
-
-    USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef *)hUsbDeviceFS.pClassData;
-
-    int sent = 0;
-    while (sent < len) {
-        int chunk = len - sent;
-        if (chunk > APP_TX_DATA_SIZE) chunk = APP_TX_DATA_SIZE;
-
-        // Wait for the previous transfer to finish (with timeout)
-        uint32_t start = HAL_GetTick();
-        while (hcdc->TxState != 0) {
-            if (HAL_GetTick() - start > 50) return sent;
-        }
-
-        // CDC_Transmit_FS doesn't copy data, so use our own buffer
-        memcpy(txbuf, ptr + sent, chunk);
-
-        start = HAL_GetTick();
-        while (CDC_Transmit_FS(txbuf, chunk) == USBD_BUSY) {
-            if (HAL_GetTick() - start > 50) return sent;
-        }
-        sent += chunk;
-    }
-    return len;
-}
 /* USER CODE END 0 */
 
 /**
@@ -132,7 +107,10 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-
+  MX_USB_DEVICE_Init();
+  params.state = &state;
+  void *paramsDefault = ((void*) &params);
+  void *paramsUI = ((void*) &params);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -156,7 +134,10 @@ int main(void)
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  defaultTaskHandle = osThreadNew(TaskDefault, (void*) paramsDefault, &defaultTask_attributes);
+
+  /* creation of ui */
+  uiHandle = osThreadNew(TaskUI, (void*) paramsUI, &ui_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -272,28 +253,6 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
-
-/* USER CODE BEGIN Header_StartDefaultTask */
-/**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
-{
-  /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
-  for(;;)
-  {
-    HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-    printf("Toggle!\r\n");
-    osDelay(500);
-  }
-  /* USER CODE END 5 */
-}
 
 /**
   * @brief  Period elapsed callback in non blocking mode
