@@ -10,17 +10,18 @@
 void TaskDefault(void *argument)
 {
     struct Params *params = (struct Params *)argument;
-    struct State *state = params->state;
     (void)params;
 
     for (;;)
     {
         HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
-        state->ledGreenIsOn = true;
-        osDelay(2000);
+        params->state->ledGreenIsOn = true;
+        (void) osSemaphoreRelease(params->updateUISemHandle);
+        osDelay(3000);
 
         HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-        state->ledGreenIsOn = false;
-        osDelay(2000);
+        params->state->ledGreenIsOn = false;
+        (void) osSemaphoreRelease(params->updateUISemHandle);
+        osDelay(3000);
     }
 }

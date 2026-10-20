@@ -108,7 +108,10 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
+
   params.state = &state;
+  params.updateUISemHandle = osSemaphoreNew(1, 1, NULL);
+
   void *paramsDefault = ((void*) &params);
   void *paramsUI = ((void*) &params);
   /* USER CODE END 2 */

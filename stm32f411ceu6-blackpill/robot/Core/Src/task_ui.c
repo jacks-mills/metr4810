@@ -70,43 +70,36 @@ struct State {
 */
 
 static void draw_state(struct State *s) {
-    printf("safety is enabled: %s\r\n", s->safetyIsEnabled ? "yes" : "no");
-    printf("debug is enabled:  %s\r\n", s->debugIsEnabled ? "yes" : "no");
-
-    printf("mode: %s\r\n", mode2string(s->mode));
-    printf("sequence step: %s\r\n", step2string(s->sequenceStep));
-
-    printf("drill speed: %lu\r\n", s->drillSpeed);
-
-    printf("drive direction: %s\r\n", direction2string(s->driveDirection));
-    printf("drive speed:     %lu\r\n", s->driveSpeed);
-
+    printf("safety is enabled:  %s\r\n", s->safetyIsEnabled ? "yes" : "no");
+    printf("debug is enabled:   %s\r\n", s->debugIsEnabled ? "yes" : "no");
+    printf("mode:               %s\r\n", mode2string(s->mode));
+    printf("sequence step:      %s\r\n", step2string(s->sequenceStep));
+    printf("drill speed:        %lu\r\n", s->drillSpeed);
+    printf("drive direction:    %s\r\n", direction2string(s->driveDirection));
+    printf("drive speed:        %lu\r\n", s->driveSpeed);
     printf("rotation angle:     %li\r\n", s->rotationAngle);
     printf("rotation angle set: %li\r\n", s->rotationAngleSet);
-
-    printf("green led: %s\r\n", s->ledGreenIsOn ? "on" : "off");
+    printf("green led:          %s\r\n", s->ledGreenIsOn ? "on" : "off");
 }
 
 void TaskUI(void *argument)
 {
     struct Params *params = (struct Params *)argument;
-    struct State *state = params->state;
-    (void)params;
 
-    uint32_t print = 0;
+    /* release before loop so we print */
+    (void) osSemaphoreRelease(params->updateUISemHandle);
+
+    uint32_t uiPrints = 0;
     for (;;)
     {
-        
+        (void) osSemaphoreAcquire(params->updateUISemHandle, osWaitForever);
         printf("\033[1;1;H"); /* move to origin */
         printf("\033[2J");    /* erase display */
+
+        printf("ui print %lu\r\n\n", uiPrints);
+        uiPrints++;
+
+        draw_state(params->state);
         fflush(stdout);
-
-        printf("print %lu\r\n\n", print);
-        print++;
-
-        draw_state(state);
-        fflush(stdout);
-
-        osDelay(250);
     }
 }

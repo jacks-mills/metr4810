@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "cmsis_os.h"
 
 enum Mode {
     AUTO,
@@ -48,6 +49,7 @@ struct State {
 
 struct Params {
     struct State *state;
+    osSemaphoreId_t updateUISemHandle;
 };
 
 extern struct State state;
