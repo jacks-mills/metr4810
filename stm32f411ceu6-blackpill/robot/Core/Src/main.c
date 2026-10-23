@@ -23,11 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "robot_state.h"
-#include "task_default.h"
-#include "task_ui.h"
-#include "task_console.h"
-#include "usb_syscalls.h"
+#include "app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,38 +41,48 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-  .name = "defaultTask",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for ui */
-osThreadId_t uiHandle;
-const osThreadAttr_t ui_attributes = {
-  .name = "ui",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal7,
-};
-/* Definitions for console */
-osThreadId_t consoleHandle;
-const osThreadAttr_t console_attributes = {
-  .name = "console",
+TIM_HandleTypeDef htim3;
+
+/* Definitions for control */
+osThreadId_t controlHandle;
+const osThreadAttr_t control_attributes = {
+  .name = "control",
   .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityBelowNormal,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
+/* Definitions for terminal */
+osThreadId_t terminalHandle;
+const osThreadAttr_t terminal_attributes = {
+  .name = "terminal",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for drive */
+osThreadId_t driveHandle;
+const osThreadAttr_t drive_attributes = {
+  .name = "drive",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
+};
+/* Definitions for rotate */
+osThreadId_t rotateHandle;
+const osThreadAttr_t rotate_attributes = {
+  .name = "rotate",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
 };
 /* USER CODE BEGIN PV */
-struct Params params;   /* shared with tasks via their osThreadNew argument */
-struct State state;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-extern void TaskDefault(void *argument);
-extern void TaskUI(void *argument);
-extern void TaskConsole(void *argument);
+static void MX_TIM3_Init(void);
+extern void TaskControl(void *argument);
+extern void TaskTerminal(void *argument);
+extern void TaskDrive(void *argument);
+extern void TaskRotate(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -116,16 +122,10 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  usb_syscalls_init();     /* must come before USB starts receiving */
-  MX_USB_DEVICE_Init();
-
-  params.state = &state;
-  params.updateUISemHandle = osSemaphoreNew(1, 1, NULL);
-
-  void *paramsDefault = ((void*) &params);
-  void *paramsUI = ((void*) &params);
-  void *paramsConsole = ((void*) &params);
+  app_init_early();         /* before USB starts: the USB interrupt uses it */
+  MX_USB_DEVICE_Init();     /* CubeMX only calls it from its weak TaskControl, which ours replaces */
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -144,18 +144,21 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
+  app_init_rtos();
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(TaskDefault, (void*) paramsDefault, &defaultTask_attributes);
+  /* creation of control */
+  controlHandle = osThreadNew(TaskControl, NULL, &control_attributes);
 
-  /* creation of ui */
-  uiHandle = osThreadNew(TaskUI, (void*) paramsUI, &ui_attributes);
+  /* creation of terminal */
+  terminalHandle = osThreadNew(TaskTerminal, NULL, &terminal_attributes);
 
-  /* creation of console */
-  consoleHandle = osThreadNew(TaskConsole, (void*) paramsConsole, &console_attributes);
+  /* creation of drive */
+  driveHandle = osThreadNew(TaskDrive, NULL, &drive_attributes);
+
+  /* creation of rotate */
+  rotateHandle = osThreadNew(TaskRotate, NULL, &rotate_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -227,6 +230,70 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 4799;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -242,9 +309,16 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(DRIVE_DIR_GPIO_Port, DRIVE_DIR_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(DRILL_DIR_GPIO_Port, DRILL_DIR_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
@@ -259,9 +333,25 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(START_BUTTON_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : DRIVE_DIR_Pin DRILL_DIR_Pin */
+  GPIO_InitStruct.Pin = DRIVE_DIR_Pin|DRILL_DIR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : EXT_MAX_Pin EXT_MIN_Pin */
+  GPIO_InitStruct.Pin = EXT_MAX_Pin|EXT_MIN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI3_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI3_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -271,6 +361,26 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_TaskControl */
+/**
+  * @brief  Function implementing the control thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_TaskControl */
+__weak void TaskControl(void *argument)
+{
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END 5 */
+}
 
 /**
   * @brief  Period elapsed callback in non blocking mode

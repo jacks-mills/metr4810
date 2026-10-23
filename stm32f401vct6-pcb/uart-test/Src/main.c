@@ -3,7 +3,7 @@
  * @brief   UART terminal test for the PCB (STM32F401VCT6).
  *
  * Checks the USB-serial adapter on J7 and the four LEDs before running
- * robot2. Same port and settings as the robot2 terminal: USART1,
+ * robot. Same port and settings as the robot terminal: USART1,
  * PA9 = TX, PA10 = RX, 115200 8N1.
  *
  * Commands (any case), one per line, ended by Enter (CR, LF or CR LF):
@@ -17,9 +17,9 @@
  * don't show what you type), with Backspace working. Control bytes show as
  * <hex>, e.g. an arrow key as <1B>[A.
  *
- * LEDs: assumed lit when the pin is high, like robot2's status_led_pcb.c.
+ * LEDs: assumed lit when the pin is high, like robot's status_led_pcb.c.
  * If "led on" turns them off, set LED_ACTIVE_HIGH to 0 (and change LED_ON
- * in robot2 to match).
+ * in robot to match).
  *
  * Clock: the PCB has no crystal; left at the reset default, HSI 16 MHz with
  * no PLL. USART1 runs from APB2 = 16 MHz.

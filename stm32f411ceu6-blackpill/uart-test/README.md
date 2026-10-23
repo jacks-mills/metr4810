@@ -1,7 +1,7 @@
 # uart-test (Blackpill)
 
 Checks the 3.3 V USB-serial adapter and terminal program before they're used
-for the robot2 terminal on the PCB. Same port and settings as the PCB:
+for the robot terminal on the PCB. Same port and settings as the PCB:
 USART1, PA9 TX / PA10 RX, 115200 8N1. Standalone: register level, no HAL,
 no CubeMX, no FreeRTOS.
 

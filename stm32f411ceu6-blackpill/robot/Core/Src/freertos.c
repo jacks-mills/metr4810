@@ -24,7 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "fault.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,6 +51,29 @@
 /* USER CODE BEGIN FunctionPrototypes */
 
 /* USER CODE END FunctionPrototypes */
+
+/* Hook prototypes */
+void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName);
+void vApplicationMallocFailedHook(void);
+
+/* USER CODE BEGIN 4 */
+void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
+{
+   /* A task used more stack than it was given. pcTaskName says which one:
+      give it a bigger stack in CubeMX (FREERTOS > Tasks and Queues). */
+   (void)xTask;
+   fault_halt("stack overflow", (const char *)pcTaskName);
+}
+/* USER CODE END 4 */
+
+/* USER CODE BEGIN 5 */
+void vApplicationMallocFailedHook(void)
+{
+   /* The FreeRTOS heap ran out while creating a task, queue, etc.
+      Raise TOTAL_HEAP_SIZE in CubeMX (FREERTOS > Config parameters). */
+   fault_halt("FreeRTOS heap full", NULL);
+}
+/* USER CODE END 5 */
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */

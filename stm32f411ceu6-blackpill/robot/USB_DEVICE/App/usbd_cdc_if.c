@@ -22,7 +22,7 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-#include "usb_syscalls.h"
+#include "term_io_usb.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -155,6 +155,7 @@ static int8_t CDC_Init_FS(void)
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, UserRxBufferFS);
+  term_io_usb_reset_isr();
   return (USBD_OK);
   /* USER CODE END 3 */
 }
@@ -228,7 +229,8 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     break;
 
     case CDC_SET_CONTROL_LINE_STATE:
-
+      /* pbuf is the setup request; bit 0 of wValue is DTR */
+      term_io_usb_line_state_isr((((USBD_SetupReqTypedef *)pbuf)->wValue & 0x01U) != 0U);
     break;
 
     case CDC_SEND_BREAK:
@@ -261,7 +263,7 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
-  usb_syscalls_rx_isr(Buf, *Len);   /* hand data to _read */
+  term_io_usb_receive_isr(Buf, *Len);   /* typed bytes -> terminal task */
 
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);

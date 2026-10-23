@@ -1,7 +1,7 @@
 # uart-test (PCB)
 
 Checks the 3.3 V USB-serial adapter on J7 and the four LEDs before running
-robot2 on the PCB. Same port and settings as the robot2 terminal: USART1,
+robot on the PCB. Same port and settings as the robot terminal: USART1,
 PA9 TX / PA10 RX, 115200 8N1. Standalone: register level, no HAL, no CubeMX,
 no FreeRTOS. The Blackpill version is `../../stm32f411ceu6-blackpill/uart-test`.
 
@@ -21,9 +21,9 @@ Clock is the reset default, HSI 16 MHz (the PCB has no crystal).
 
 ## LED polarity
 
-The LEDs are assumed lit when the pin is high, like robot2's
+The LEDs are assumed lit when the pin is high, like robot's
 `status_led_pcb.c`. If `led on` turns them off, set `LED_ACTIVE_HIGH` to 0 in
-`Src/main.c`, and change `LED_ON` in robot2's `status_led_pcb.c` to
+`Src/main.c`, and change `LED_ON` in robot's `status_led_pcb.c` to
 `GPIO_PIN_RESET` too.
 
 ## Wiring (J7)

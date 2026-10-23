@@ -3,7 +3,7 @@
  * @brief   UART terminal test for the Blackpill (STM32F411CEU6).
  *
  * Checks the USB-serial adapter and terminal program before they're used
- * with robot2 on the PCB. Same port and settings as the PCB terminal:
+ * with robot on the PCB. Same port and settings as the PCB terminal:
  * USART1, PA9 = TX, PA10 = RX, 115200 8N1.
  *
  * Commands (any case), one per line, ended by Enter (CR, LF or CR LF):
