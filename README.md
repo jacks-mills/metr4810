@@ -5,11 +5,11 @@ STM32F411CEU6 Blackpill, then ported to our STM32F401VCT6 PCB.
 
 ```
 stm32f411ceu6-blackpill/    Blackpill (STM32F411CEU6, 25 MHz crystal, USB-C)
-    blinky/                 LED blink test (STM32CubeIDE project)
+    blinky/                 LED blink test
     robot/                  robot firmware, terminal over USB
     uart-test/              USB-serial adapter test
 stm32f401vct6-pcb/          our PCB (STM32F401VCT6, no crystal, no USB)
-    blinky/                 LED blink test (CubeMX CMake project)
+    blinky/                 LED blink test
     robot/                  robot firmware, terminal over USART1 (J7)
     uart-test/              USB-serial adapter and LED test
 ```
@@ -29,8 +29,7 @@ You control it from a terminal UI with commands such as `start`, `pause`,
 - **PCB:** terminal over USART1 on J7 through a 3.3 V USB-serial adapter;
   four status LEDs on PD0–PD3.
 
-Both are STM32CubeMX projects that generate CMake files. Our own code lives
-in `App/`. The two `App/` folders are identical apart from the board files,
+Our own code lives in `App/`. The two `App/` folders are identical apart from the board files,
 so a fix to shared logic has to be copied across by hand. Configure with
 `-DROBOT_SIMULATED=ON` to simulate the arm, drill and servo on a bare board.
 Each project's README has the pinout, wiring and details.
@@ -49,19 +48,23 @@ picks one of the four LEDs.
 The first "is the board alive" tests. Both run from the internal 16 MHz
 oscillator (HSI), so they work even if the crystal or clock setup is wrong.
 
-- **Blackpill:** flashes the PC13 LED, 333 ms on and 333 ms off. It's an
-  **STM32CubeIDE** project (`.project`/`.cproject`), not CMake; see
-  [Blackpill blinky](#blackpill-blinky-stm32cubeide) below.
-- **PCB:** toggles the green LED (PD2) every second. CubeMX CMake project,
-  built like the others.
+- **Blackpill:** flashes the PC13 LED, 333 ms on and 333 ms off.
+- **PCB:** toggles the green LED (PD2) every second.
+
+### How the projects are set up
+
+Every project builds the same way, with CMake and Ninja (see
+[Build](#build)). robot and blinky are STM32CubeMX projects: the `.ioc` file
+holds the pin, clock and peripheral setup, and CubeMX generates `Core/`,
+`Drivers/` and the files in `cmake/` from it. uart-test is hand-written and
+has no `.ioc`.
 
 ## Software
 
 | Tool | What it's for | Needed for |
 |---|---|---|
 | [STM32CubeCLT](https://www.st.com/en/development-tools/stm32cubeclt.html) | ST's command-line toolset: Arm GCC (`arm-none-eabi-gcc`), CMake, Ninja, `STM32_Programmer_CLI` and the ST-LINK drivers, all in one install | building and flashing everything |
-| [STM32CubeMX](https://www.st.com/en/development-tools/stm32cubemx.html) | edits `.ioc` files and regenerates the HAL/start-up code | only when changing pins, clocks or peripherals in robot or PCB blinky |
-| [STM32CubeIDE](https://www.st.com/en/development-tools/stm32cubeide.html) | Eclipse-based IDE | only for Blackpill blinky |
+| [STM32CubeMX](https://www.st.com/en/development-tools/stm32cubemx.html) | edits `.ioc` files and regenerates the HAL/start-up code | only when changing pins, clocks or peripherals in robot or blinky |
 | Serial terminal | talking to robot and uart-test | picocom (Linux), PuTTY (Windows) |
 | Git | getting the repo | |
 | QEMU (optional) | running uart-test without hardware | |
@@ -112,9 +115,6 @@ or V3) to flash over SWD, and for the PCB a **3.3 V** USB-serial adapter.
 4. **STM32CubeMX** (only if you'll change a `.ioc`): download the Linux zip,
    unzip it and run the `SetupSTM32CubeMX-*` installer inside.
 
-5. **STM32CubeIDE** (only for Blackpill blinky): download the Debian Linux
-   installer, unzip it and run `sudo sh ./st-stm32cubeide_*.deb_bundle.sh`.
-
 ### Windows 10 / 11
 
 Run these in PowerShell.
@@ -145,16 +145,15 @@ Run these in PowerShell.
    driver. Plug the adapter in and look under **Device Manager → Ports (COM &
    LPT)** for its `COMx` number.
 
-4. **STM32CubeMX** (only if you'll change a `.ioc`) and **STM32CubeIDE** (only
-   for Blackpill blinky): download and run their Windows installers.
+4. **STM32CubeMX** (only if you'll change a `.ioc`): download and run the
+   Windows installer.
 
-## Build (CMake projects)
+## Build
 
-This covers robot and uart-test on both boards, and PCB blinky. From the
-project folder:
+Every project builds the same way. From the project folder:
 
 ```sh
-cd stm32f401vct6-pcb/robot            # or any other CMake project
+cd stm32f401vct6-pcb/robot            # or any other project
 cmake --preset Debug                  # once, or after deleting build/
 cmake --build --preset Debug          # after every change
 ```
@@ -191,23 +190,8 @@ If it can't connect, check the wiring and power first. If the running
 program has disabled the SWD pins or is stuck, wire NRST as well and connect
 under reset: `-c port=SWD mode=UR`.
 
-### Blackpill blinky (STM32CubeIDE)
-
-It's built by STM32CubeIDE, not CMake, and its build folder (`Debug/`) isn't
-in Git, so a fresh clone has nothing to build from the command line until
-CubeIDE has generated it.
-
-1. In STM32CubeIDE: **File → Import → General → Existing Projects into
-   Workspace**, select `stm32f411ceu6-blackpill/blinky` and click **Finish**.
-2. **Project → Build Project** (or the hammer button). The output is
-   `Debug/blinky.elf`.
-3. Flash with the Run button, or from the project folder:
-
-   ```sh
-   STM32_Programmer_CLI -c port=SWD -w Debug/blinky.elf -v -rst
-   ```
-
 ## Serial terminal
+
 All the terminals are 115200 baud, 8N1, no flow control.
 
 | Project | Connection | Linux | Windows |
