@@ -246,8 +246,11 @@ void terminal_connected(uint32_t now)
 
 void terminal_disconnected(void)
 {
+    struct Command cmd = { .type = CMD_TERMINAL_LOST, .source = SOURCE_TASK };
+
     redrawPending = false;
     ui_invalidate();
+    (void)command_send(&cmd);           /* control stops any manual motion */
 }
 
 void terminal_input(uint8_t c, uint32_t now)

@@ -3,8 +3,8 @@
  * @brief   Buffered output to the terminal (terminal task only).
  *
  * Output is collected in a buffer and sent with term_flush(), once per pass
- * of the terminal task. That way a screen update goes out as one USB
- * transfer instead of dozens of small ones.
+ * of the terminal task. That way a screen update goes out as one USB (or
+ * DMA) transfer instead of dozens of small ones.
  */
 #ifndef TERM_H
 #define TERM_H

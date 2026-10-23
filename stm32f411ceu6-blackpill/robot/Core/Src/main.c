@@ -26,6 +26,7 @@
 #include "robot_state.h"
 #include "task_default.h"
 #include "task_ui.h"
+#include "task_console.h"
 #include "usb_syscalls.h"
 /* USER CODE END Includes */
 
@@ -58,6 +59,13 @@ const osThreadAttr_t ui_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal7,
 };
+/* Definitions for console */
+osThreadId_t consoleHandle;
+const osThreadAttr_t console_attributes = {
+  .name = "console",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
+};
 /* USER CODE BEGIN PV */
 struct Params params;   /* shared with tasks via their osThreadNew argument */
 struct State state;
@@ -68,6 +76,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 extern void TaskDefault(void *argument);
 extern void TaskUI(void *argument);
+extern void TaskConsole(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -116,6 +125,7 @@ int main(void)
 
   void *paramsDefault = ((void*) &params);
   void *paramsUI = ((void*) &params);
+  void *paramsConsole = ((void*) &params);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -143,6 +153,9 @@ int main(void)
 
   /* creation of ui */
   uiHandle = osThreadNew(TaskUI, (void*) paramsUI, &ui_attributes);
+
+  /* creation of console */
+  consoleHandle = osThreadNew(TaskConsole, (void*) paramsConsole, &console_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

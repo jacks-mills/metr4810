@@ -36,6 +36,6 @@ void sysinfo_read(struct SysInfo *info)
     info->taskCount = (uint8_t)count;
     for (UBaseType_t i = 0; i < count; i++) {
         snprintf(info->tasks[i].name, sizeof info->tasks[i].name, "%s", status[i].pcTaskName);
-        info->tasks[i].stackFree = status[i].usStackHighWaterMark * sizeof(StackType_t);
+        info->tasks[i].stackFree = status[i].usStackHighWaterMark;    /* words */
     }
 }

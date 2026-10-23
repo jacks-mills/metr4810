@@ -11,7 +11,7 @@
 
 struct TaskInfo {
     char name[12];
-    uint32_t stackFree;         /* bytes never used, since the task started */
+    uint32_t stackFree;         /* words never used since the task started (CubeMX's unit) */
 };
 
 struct SysInfo {

@@ -1,10 +1,12 @@
 /**
  * @file    command.h
- * @brief   Commands for the control task.
+ * @brief   Commands and events for the control task.
  *
  * Anything that wants the robot to do something (the terminal, the start
- * button) builds a struct Command and calls command_send(). Only the control
- * task receives them, so it is the one place that decides what moves.
+ * button) builds a struct Command and calls command_send(). The drive and
+ * rotate tasks report how their goals ended on the same queue (EVT_...).
+ * Only the control task receives them, so it is the one place that decides
+ * what moves, and it waits on just this one queue.
  */
 #ifndef COMMAND_H
 #define COMMAND_H
@@ -49,13 +51,19 @@ enum CommandType {
     CMD_SERVO_CENTRE,
     CMD_SERVO_LIMITS,
 
+    /* not typed: sent by other tasks */
+    CMD_TERMINAL_LOST,      /* the terminal program closed the port */
+    EVT_DRIVE_RESULT,       /* value: enum DriveResult, value2: goal id */
+    EVT_ROTATE_RESULT,      /* value: enum RotateResult, value2: goal id */
+
     CMD_COUNT
 };
 
 enum CommandSource {
     SOURCE_CONSOLE,         /* typed command */
     SOURCE_STOP_KEY,        /* Esc in the terminal */
-    SOURCE_BUTTON           /* start button */
+    SOURCE_BUTTON,          /* start button */
+    SOURCE_TASK             /* the drive or rotate task, or the terminal itself */
 };
 
 struct Command {

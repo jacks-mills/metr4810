@@ -47,7 +47,7 @@ struct State {
 
     bool safetyEnabled;         /* interlock: never rotate while extended or extending */
     bool debugEnabled;
-    bool simulated;             /* drive and rotation are simulated (stages 1-2) */
+    bool simulated;             /* HW_SIMULATED build: no real motors or servo */
 
     bool drillOn;
     uint8_t drillSpeed;
@@ -55,13 +55,14 @@ struct State {
     uint8_t rotateSpeed;
     int16_t rotateTarget;
 
-    /* ---- written by drive (stage 1: the simulation in control) ---------- */
+    /* ---- written by drive ---------------------------------------------- */
     enum DriveMotion driveMotion;
     bool atExtMin;
     bool atExtMax;
 
-    /* ---- written by rotate (stage 1: the simulation in control) --------- */
+    /* ---- written by rotate --------------------------------------------- */
     bool servoOnline;
+    bool servoFree;             /* torque off: the plate can be turned by hand */
     bool rotating;
     int16_t rotateAngle;        /* measured by the servo */
     int16_t servoLimitMin;      /* angle limits stored in the servo */
@@ -69,6 +70,7 @@ struct State {
     uint8_t servoVoltage;       /* tenths of a volt */
     int8_t servoTemperature;    /* deg C */
     int16_t servoLoad;          /* tenths of a percent */
+    uint8_t servoError;         /* error flags from the servo's last reply */
 };
 
 extern struct State state;

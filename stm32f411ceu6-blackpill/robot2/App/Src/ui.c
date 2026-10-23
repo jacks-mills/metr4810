@@ -202,6 +202,9 @@ static void fmt_rotation_state(const struct UiData *d, char *t, size_t n, const 
     if (!d->state.servoOnline) {
         snprintf(t, n, "offline");
         *style = S_RED;
+    } else if (d->state.servoFree) {
+        snprintf(t, n, "free");
+        *style = S_YELLOW;
     } else if (d->state.rotating) {
         snprintf(t, n, "moving");
         *style = S_CYAN;
@@ -222,8 +225,12 @@ static void fmt_servo(const struct UiData *d, char *t, size_t n, const char **st
     format_tenths(load, sizeof load, s->servoLoad);
     format_tenths(lo, sizeof lo, s->servoLimitMin);
     format_tenths(hi, sizeof hi, s->servoLimitMax);
-    snprintf(t, n, "%u.%u V   %d C   load %s %%   limits %s to %s deg",
-             s->servoVoltage / 10u, s->servoVoltage % 10u, s->servoTemperature, load, lo, hi);
+    int len = snprintf(t, n, "%u.%u V   %d C   load %s %%   limits %s to %s deg",
+                       s->servoVoltage / 10u, s->servoVoltage % 10u, s->servoTemperature, load, lo, hi);
+    if (s->servoError != 0 && len > 0 && (size_t)len < n) {
+        snprintf(t + len, n - (size_t)len, "   ERROR 0x%02x", s->servoError);
+        *style = S_RED;
+    }
 }
 
 static void fmt_heap(const struct UiData *d, char *t, size_t n, const char **style)
@@ -243,14 +250,12 @@ static void fmt_stacks(const struct UiData *d, char *t, size_t n, const char **s
     size_t used = 0;
     t[0] = '\0';
     for (unsigned i = 0; i < d->sys.taskCount && used + 1 < n; i++) {
-        int len = snprintf(t + used, n - used, "%s%s %lu", i ? "  " : "",
+        int len = snprintf(t + used, n - used, "%s%s:%lu", i ? " " : "",
                            d->sys.tasks[i].name, (unsigned long)d->sys.tasks[i].stackFree);
         if (len < 0)
             break;
         used += (size_t)len;
     }
-    if (d->sys.taskCount > 0 && used + 1 < n)
-        snprintf(t + used, n - used, "  (bytes free)");
 }
 
 /* ------------------------------------------------------------------------- */
@@ -298,7 +303,7 @@ static const struct Label labels[] = {
     { ROW_ROTATION,  2, false, S_NONE, "Rotation" },
     { ROW_SERVO,     2, true,  S_NONE, "Servo" },
     { ROW_HEAP,      2, true,  S_NONE, "Heap" },
-    { ROW_STACKS,    2, true,  S_NONE, "Stacks" },
+    { ROW_STACKS,    2, true,  S_NONE, "Stack" },
 };
 
 /* ------------------------------------------------------------------------- */

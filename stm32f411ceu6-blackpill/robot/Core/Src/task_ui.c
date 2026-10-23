@@ -89,6 +89,8 @@ void TaskUI(void *argument)
     /* release before loop so we print */
     (void) osSemaphoreRelease(params->updateUISemHandle);
 
+    char buffer[128] = {0};
+
     uint32_t uiPrints = 0;
     for (;;)
     {
@@ -101,5 +103,7 @@ void TaskUI(void *argument)
 
         draw_state(params->state);
         fflush(stdout);
+
+
     }
 }

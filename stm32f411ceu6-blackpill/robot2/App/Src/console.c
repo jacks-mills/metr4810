@@ -105,6 +105,9 @@ static const char *const commandNames[CMD_COUNT] = {
     [CMD_SERVO_HOLD]       = "servo hold",
     [CMD_SERVO_CENTRE]     = "servo centre",
     [CMD_SERVO_LIMITS]     = "servo limits",
+    [CMD_TERMINAL_LOST]    = "terminal closed",
+    [EVT_DRIVE_RESULT]     = "drive result",
+    [EVT_ROTATE_RESULT]    = "rotate result",
 };
 
 const char *const console_help_lines[] = {
