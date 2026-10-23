@@ -109,7 +109,7 @@ or V3) to flash over SWD, and for the PCB a **3.3 V** USB-serial adapter.
    then log out and back in:
 
    ```sh
-   sudo usermod -aG dialout $USER
+   sudo usermod --append --groups dialout $USER
    ```
 
 4. **STM32CubeMX** (only if you'll change a `.ioc`): download the Linux zip,
@@ -122,9 +122,9 @@ Run these in PowerShell.
 1. **Basic tools:**
 
    ```powershell
-   winget install --id Git.Git -e
-   winget install --id PuTTY.PuTTY -e
-   winget install --id SoftwareFreedomConservancy.QEMU -e   # optional; installs to C:\Program Files\qemu (not on PATH)
+   winget install --id Git.Git --exact
+   winget install --id PuTTY.PuTTY --exact
+   winget install --id SoftwareFreedomConservancy.QEMU --exact   # optional; installs to C:\Program Files\qemu (not on PATH)
    ```
 
 2. **STM32CubeCLT:** download the *Windows installer*, unzip it and run the
@@ -165,7 +165,7 @@ The result is `build/Debug/<project>.elf` (`robot.elf`, `uart-test.elf`,
 - **Simulated robot:** `cmake --preset Debug -DROBOT_SIMULATED=ON` (`OFF` to
   go back). The setting is kept in `build/Debug` until you change it.
 - **Clean build:** delete the `build` folder and configure again
-  (`rm -rf build` on Linux, `Remove-Item -Recurse -Force build` in
+  (`rm --recursive --force build` on Linux, `Remove-Item -Recurse -Force build` in
   PowerShell). Also do this after moving or renaming a project folder,
   because the CMake cache stores the full path.
 - **After editing a `.ioc`:** open it in STM32CubeMX and click **GENERATE
@@ -179,16 +179,17 @@ Connect the ST-LINK to the board's SWD pins: **SWDIO, SWCLK, GND**, and
 from the project folder:
 
 ```sh
-STM32_Programmer_CLI -c port=SWD -w build/Debug/robot.elf -v -rst
+STM32_Programmer_CLI --connect port=SWD --write build/Debug/robot.elf --verify -rst
 ```
 
-`-w` writes the file, `-v` verifies it and `-rst` resets the chip so the new
-program starts. Change the `.elf` name for other projects. It's the same
-command on Windows and Linux.
+`--write` writes the file, `--verify` reads it back to check it and `-rst`
+resets the chip so the new program starts (`-rst` has no long form). Change
+the `.elf` name for other projects. It's the same command on Windows and
+Linux, and `STM32_Programmer_CLI --help` lists every option.
 
 If it can't connect, check the wiring and power first. If the running
 program has disabled the SWD pins or is stuck, wire NRST as well and connect
-under reset: `-c port=SWD mode=UR`.
+under reset: `--connect port=SWD mode=UR`.
 
 ## Serial terminal
 
@@ -197,7 +198,7 @@ All the terminals are 115200 baud, 8N1, no flow control.
 | Project | Connection | Linux | Windows |
 |---|---|---|---|
 | Blackpill robot | USB-C cable | `picocom /dev/ttyACM0` | PuTTY, Serial, the board's `COMx` |
-| PCB robot, both uart-tests | 3.3 V USB-serial adapter: adapter TX → PA10, adapter RX → PA9, GND → GND | `picocom -b 115200 /dev/ttyUSB0` | PuTTY, Serial, the adapter's `COMx`, speed 115200 |
+| PCB robot, both uart-tests | 3.3 V USB-serial adapter: adapter TX → PA10, adapter RX → PA9, GND → GND | `picocom --baud 115200 /dev/ttyUSB0` | PuTTY, Serial, the adapter's `COMx`, speed 115200 |
 
 Quit picocom with **Ctrl-A** then **Ctrl-X**. `dmesg | tail` (Linux) or Device
 Manager (Windows) shows which port appeared when you plugged in. robot's UI
@@ -211,7 +212,7 @@ LEDs aren't shown; `led status` still tracks them.
 ```sh
 cd stm32f411ceu6-blackpill/uart-test
 cmake --preset Debug && cmake --build --preset Debug
-qemu-system-arm -M netduinoplus2 -nographic -serial mon:stdio -kernel build/Debug/uart-test.elf
+qemu-system-arm -machine netduinoplus2 -nographic -serial mon:stdio -kernel build/Debug/uart-test.elf
 ```
 
 Quit with **Ctrl-A** then **X**. robot doesn't run in QEMU because it needs
