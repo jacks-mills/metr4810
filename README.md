@@ -8,6 +8,7 @@ stm32f411ceu6-blackpill/    Blackpill (STM32F411CEU6, 25 MHz crystal, USB-C)
     blinky/                 LED blink test
     robot/                  robot firmware, terminal over USB
     uart-test/              USB-serial adapter test
+    usb-uart-bridge/        the Blackpill as a 3.3 V USB-serial adapter for the PCB
 stm32f401vct6-pcb/          our PCB (STM32F401VCT6, no crystal, no USB)
     blinky/                 LED blink test
     robot/                  robot firmware, terminal over USART1 (J7)
@@ -26,8 +27,8 @@ You control it from a terminal UI with commands such as `start`, `pause`,
 `stop` and manual `drive` / `rotate` / `drill`.
 
 - **Blackpill:** terminal over the USB-C port (USB CDC), status LED on PC13.
-- **PCB:** terminal over USART1 on J7 through a 3.3 V USB-serial adapter;
-  four status LEDs on PD0–PD3.
+- **PCB:** terminal over USART1 on J7 through a 3.3 V USB-serial adapter
+  (or a Blackpill running usb-uart-bridge); four status LEDs on PD0–PD3.
 
 Our own code lives in `App/`. The two `App/` folders are identical apart from the board files,
 so a fix to shared logic has to be copied across by hand. Configure with
@@ -43,6 +44,16 @@ with no HAL, CubeMX or FreeRTOS. Commands: `led on`, `led off`, `led toggle`,
 `led status`, `echo <text>`, `help`. On the PCB, `led red on` and so on
 picks one of the four LEDs.
 
+### usb-uart-bridge (Blackpill)
+
+Turns the Blackpill into a 3.3 V USB-serial adapter, for reaching the PCB's
+terminal on J7 without a separate adapter. The USB-C port appears on the PC
+as a serial port, and everything goes through to USART1 (PA9 TX, PA10 RX),
+which is wired to J7 with 1 kΩ in each line. The baud rate follows the
+terminal program, so always give it (`picocom -b 115200`). It uses the HAL
+and ST's USB library (its own copy in `lib/`) for the USB, and register-level
+USART1 with DMA. Its README has the wiring, LED meanings and a loopback check.
+
 ### blinky (both boards)
 
 The first "is the board alive" tests. Both run from the internal 16 MHz
@@ -56,8 +67,8 @@ oscillator (HSI), so they work even if the crystal or clock setup is wrong.
 Every project builds the same way, with CMake and Ninja (see
 [Build](#build)). robot and blinky are STM32CubeMX projects: the `.ioc` file
 holds the pin, clock and peripheral setup, and CubeMX generates `Core/`,
-`Drivers/` and the files in `cmake/` from it. uart-test is hand-written and
-has no `.ioc`.
+`Drivers/` and the files in `cmake/` from it. uart-test and usb-uart-bridge
+are hand-written and have no `.ioc`.
 
 ## Software
 
@@ -70,7 +81,8 @@ has no `.ioc`.
 | QEMU (optional) | running uart-test without hardware | |
 
 ST's downloads need a free myST account. You'll also need an **ST-LINK** (V2
-or V3) to flash over SWD, and for the PCB a **3.3 V** USB-serial adapter.
+or V3) to flash over SWD, and for the PCB a **3.3 V** USB-serial adapter or
+the Blackpill running usb-uart-bridge.
 
 ### Linux (Ubuntu / Debian)
 
@@ -159,7 +171,7 @@ cmake --build --preset Debug          # after every change
 ```
 
 The result is `build/Debug/<project>.elf` (`robot.elf`, `uart-test.elf`,
-`blinky.elf`). Use `Release` instead of `Debug` for an optimised build in
+`blinky.elf`, `usb-uart-bridge.elf`). Use `Release` instead of `Debug` for an optimised build in
 `build/Release/`.
 
 - **Simulated robot:** `cmake --preset Debug -DROBOT_SIMULATED=ON` (`OFF` to
@@ -199,6 +211,7 @@ All the terminals are 115200 baud, 8N1, no flow control.
 |---|---|---|---|
 | Blackpill robot | USB-C cable | `picocom /dev/ttyACM0` | PuTTY, Serial, the board's `COMx` |
 | PCB robot, both uart-tests | 3.3 V USB-serial adapter: adapter TX → PA10, adapter RX → PA9, GND → GND | `picocom --baud 115200 /dev/ttyUSB0` | PuTTY, Serial, the adapter's `COMx`, speed 115200 |
+| PCB robot through usb-uart-bridge | Blackpill USB-C; Blackpill PA9 → 1 kΩ → PCB PA10, PCB PA9 → 1 kΩ → Blackpill PA10, GND → GND | `picocom --baud 115200 /dev/ttyACM0` (the baud rate is required) | PuTTY, Serial, the Blackpill's `COMx`, speed 115200 |
 
 Quit picocom with **Ctrl-A** then **Ctrl-X**. `dmesg | tail` (Linux) or Device
 Manager (Windows) shows which port appeared when you plugged in. robot's UI
