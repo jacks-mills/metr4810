@@ -1,13 +1,4 @@
-/**
- * @file    servo.c
- * @brief   Feetech STS packets: build a request, check the reply.
- *
- * Request: FF FF id len instr params... checksum
- * Reply:   FF FF id len error params... checksum
- * len = number of params + 2. checksum = ~(id + len + instr/error + params).
- *
- * No hardware access here; servo_uart.c moves the bytes.
- */
+/* Feetech STS packets: FF FF id len instr params... checksum. */
 #include <string.h>
 
 #include "servo.h"
@@ -45,7 +36,7 @@ static enum ServoResult command(uint8_t id, uint8_t instr, const uint8_t *params
     if (servoLastRxLen == 0)
         return SERVO_NO_REPLY;
 
-    /* Find the header (skipping anything before it), then check it all. */
+    /* Find the header, then check the packet. */
     const uint8_t *r = servoLastRx;
     uint32_t left = servoLastRxLen;
     while (left >= 2 && !(r[0] == 0xFF && r[1] == 0xFF)) {

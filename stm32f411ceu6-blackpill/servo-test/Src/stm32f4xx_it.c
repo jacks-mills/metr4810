@@ -1,7 +1,4 @@
-/**
- * @file    stm32f4xx_it.c
- * @brief   Exception handlers, SysTick and USB.
- */
+/* Exception handlers, SysTick and USB. */
 #include "main.h"
 
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;

@@ -1,7 +1,4 @@
-/**
- * @file    servo.h
- * @brief   Feetech STS protocol (ST3215 / SER0070) over a half-duplex UART.
- */
+/* Feetech STS protocol (ST3215) over a half-duplex UART. */
 #ifndef SERVO_H
 #define SERVO_H
 
@@ -46,18 +43,15 @@ enum ServoResult servo_ping(uint8_t id, uint32_t timeoutUs, uint8_t *error);
 enum ServoResult servo_read(uint8_t id, uint8_t addr, uint8_t len, uint8_t *out, uint8_t *error);
 enum ServoResult servo_write(uint8_t id, uint8_t addr, const uint8_t *data, uint8_t len, uint8_t *error);
 
-/* The raw bytes of the last reply, for showing what came back when it
- * wasn't valid. */
+/* The raw bytes of the last reply. */
 extern uint8_t servoLastRx[64];
 extern uint32_t servoLastRxLen;
 
-/* ---- provided by servo_uart.c (or a fake, for testing on a PC) ---------- */
+/* ---- Provided by servo_uart.c ---- */
 
 void servo_port_init(void);
 
-/* Sends tx, then collects the reply into rx until the line has been quiet
- * for a moment after it, rxMax bytes arrive, or nothing has started within
- * timeoutUs. Returns the number of bytes received. */
+/* Sends tx, then collects the reply. Returns the number of bytes received. */
 uint32_t servo_port_exchange(const uint8_t *tx, uint32_t txLen, uint8_t *rx, uint32_t rxMax,
                              uint32_t timeoutUs);
 

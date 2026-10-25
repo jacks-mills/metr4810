@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-# Servo test for the Blackpill: a command prompt on the USB-C port for the
-# ST3215 bus servo on PA2. No CubeMX or FreeRTOS: the HAL and ST's USB
-# device library (in lib/, copied from usb-uart-bridge) do the USB, and
-# USART2 is set up at register level.
+# Servo test for the Blackpill (ST3215 servo on PA2, console on USB-C).
 #     cmake --preset Debug && cmake --build --preset Debug
 
 set(CMAKE_C_STANDARD 11)

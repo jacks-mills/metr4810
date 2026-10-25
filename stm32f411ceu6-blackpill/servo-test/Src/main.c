@@ -1,23 +1,10 @@
-/**
- * @file    main.c
- * @brief   Servo test for the Blackpill (STM32F411CEU6): a command prompt on
- *          the USB-C port for the ST3215 (DFRobot SER0070) bus servo.
+/* Servo test for the Blackpill (STM32F411CEU6): a command prompt on the
+ * USB-C port for the ST3215 bus servo on PA2 (USART2 half-duplex, 1 Mbaud).
+ * Wiring: servo signal -> PA2 (1 kohm pull-up to 3.3 V), GND shared, servo
+ * power from its own supply. Type help.
  *
- * Wiring:
- *   servo blue (signal) -> PA2           (1 kohm pull-up from PA2 to 3.3 V recommended)
- *   servo black (GND)   -> GND           (shared with the servo's supply)
- *   servo red (VCC)     -> its own 12 V supply (4-14 V), not the Blackpill
- * PA2 is 5 V tolerant, so a servo that answers at 5 V is fine.
- *
- * Terminal: the Blackpill's USB-C port, e.g. picocom /dev/ttyACM0 (the baud
- * rate doesn't matter over USB). Commands: type help.
- *
- * Servo bus: USART2 half-duplex on PA2, 1 Mbaud (the servo's default), see
- * servo_uart.c. Protocol in servo.c.
- *
- * Clock: 25 MHz crystal -> 96 MHz core, 48 MHz USB (as usb-uart-bridge).
- * LED PC13: short blink every second = running.
- */
+ * AI-generated code: written with Claude Opus 5.5 (claude-opus-5-5), an AI
+ * assistant by Anthropic, October 2026. */
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -30,18 +17,18 @@
 #define LED_PIN         13u         /* PC13, lit when low */
 #define LINE_MAX        80u
 #define HISTORY_SIZE    16u
-#define ESC_WAIT_MS     20u         /* an Esc with nothing after it for this long is the Esc key */
+#define ESC_WAIT_MS     20u         /* lone Esc after this long = the Esc key */
 #define SCAN_TIMEOUT_US 1000u       /* per id while scanning */
 
 #define STEPS_PER_TURN  4096u
-#define DEFAULT_SPEED   500u        /* steps/s for moves (4096 steps = 360 deg) */
+#define DEFAULT_SPEED   500u        /* steps/s (4096 steps = 360 deg) */
 #define DEFAULT_ACC     50u         /* x100 steps/s^2 */
 
 static uint8_t servoId = 1;
 static uint32_t moveSpeed = DEFAULT_SPEED;
 static uint32_t moveAcc = DEFAULT_ACC;
 
-/* ================================================================ output */
+/* ---- Output ---- */
 
 static void out(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
@@ -56,8 +43,7 @@ static void out(const char *fmt, ...)
         vcp_write(buf, (size_t)n < sizeof buf ? (size_t)n : sizeof buf - 1u);
 }
 
-/* Prints what went wrong with a servo exchange. Returns true if it worked
- * (the servo's fault flags, if any, are shown but don't count as failing). */
+/* Prints what went wrong with a servo exchange. True if it worked. */
 static bool report(enum ServoResult r, uint8_t error)
 {
     if (r == SERVO_NO_REPLY) {
@@ -102,7 +88,7 @@ static void out_tenths(const char *before, int32_t tenths, const char *after)
     out("%s%s%ld.%ld%s", before, sign, (long)(tenths / 10), (long)(tenths % 10), after);
 }
 
-/* ================================================================ servo commands */
+/* ---- Servo commands ---- */
 
 static bool write_bytes(uint8_t addr, const uint8_t *data, uint8_t len)
 {
@@ -123,10 +109,7 @@ static bool read_bytes(uint8_t addr, uint8_t len, uint8_t *outBuf)
     return report(r, err);
 }
 
-/* Torque on (if it's off) first, then the goal with the current speed and
- * acceleration. Turning torque on makes the servo take where it is now as
- * its target, so it has to come before the goal, not after: after, it
- * cancels the move. */
+/* Torque on first (turning it on resets the goal), then the goal. */
 static void move_to(uint32_t steps)
 {
     if (steps >= STEPS_PER_TURN)
@@ -149,7 +132,7 @@ static void move_to(uint32_t steps)
     out(" at %lu steps/s, acc %lu\r\n", (unsigned long)moveSpeed, (unsigned long)moveAcc);
 }
 
-/* Goal = where it is now, so it stops and holds there. */
+/* Goal = where it is now. */
 static void hold_here(void)
 {
     uint8_t p[2];
@@ -213,7 +196,7 @@ static void cmd_status(void)
         (long)signed_mag(get16(&a[REG_OFFSET]), 11), b[9]);
 }
 
-/* ================================================================ parsing */
+/* ---- Parsing ---- */
 
 static char lower(char c)
 {
@@ -305,7 +288,7 @@ static bool parse_hundredths(const char *s, size_t len, uint32_t *value)
     return true;
 }
 
-/* ================================================================ commands */
+/* ---- Commands ---- */
 
 static void print_help(void)
 {
@@ -468,7 +451,7 @@ static void run_line(const char *s, size_t len)
     }
 }
 
-/* ================================================================ line input */
+/* ---- Line input ---- */
 
 static char line[LINE_MAX];
 static size_t lineLen;
@@ -477,7 +460,7 @@ static bool lineOverflow;
 static char history[HISTORY_SIZE][LINE_MAX];
 static size_t historyLen[HISTORY_SIZE];
 static uint32_t historyTotal;
-static int browse = -1;                 /* -1: typing a new line; 0: newest command shown... */
+static int browse = -1;                 /* -1: new line; 0: newest shown... */
 static char draft[LINE_MAX];
 static size_t draftLen;
 
@@ -630,7 +613,7 @@ static void handle_byte(uint8_t c)
     prev = c;
 }
 
-/* ================================================================ board */
+/* ---- Board ---- */
 
 static void led_init(void)
 {
@@ -674,8 +657,7 @@ int main(void)
     }
 }
 
-/* newlib's vsnprintf can ask for heap memory: give it the RAM between the
- * end of .bss and the space the linker script keeps for the stack. */
+/* Heap for newlib's vsnprintf: from the end of .bss up to the stack. */
 void *_sbrk(ptrdiff_t incr)
 {
     extern uint8_t _end, _estack, _Min_Stack_Size;
@@ -695,8 +677,7 @@ void HAL_MspInit(void)
     __HAL_RCC_PWR_CLK_ENABLE();
 }
 
-/* HSE 25 MHz, PLL M 25, N 192, P 2 -> 96 MHz, Q 4 -> 48 MHz USB.
- * APB1 48 MHz (USART2), APB2 96 MHz. */
+/* HSE 25 MHz -> 96 MHz core, 48 MHz USB. APB1 48 MHz, APB2 96 MHz. */
 void SystemClock_Config(void)
 {
     RCC_OscInitTypeDef osc = {0};
@@ -726,8 +707,7 @@ void SystemClock_Config(void)
         Error_Handler();
 }
 
-/* Something went badly wrong (clock didn't start, hard fault, ...): flash
- * the LED very fast forever. */
+/* Fatal error: flash the LED fast forever. */
 void Error_Handler(void)
 {
     __disable_irq();

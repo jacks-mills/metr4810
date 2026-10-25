@@ -1,18 +1,5 @@
-/**
- * @file    usbd_cdc_if.c
- * @brief   USB CDC (virtual COM port) interface, used as a text console.
- *
- * Started from usb-uart-bridge's copy. The callbacks run in the USB
- * interrupt; the vcp_* functions run in the main loop and mask the USB
- * interrupt while they use the USB library.
- *
- * Typed bytes: each OUT packet is copied into rxRing. If less than a packet
- * of room is left, the endpoint isn't re-armed (the PC waits) until
- * vcp_poll() finds room again, so a paste never loses anything.
- *
- * Text out: queued in txRing, sent up to TX_CHUNK at a time by vcp_poll().
- * Dropped while no terminal has the port open.
- */
+/* USB CDC (virtual COM port) as a text console. Callbacks run in the USB
+ * interrupt; vcp_* functions run in the main loop. */
 #include <string.h>
 
 #include "usbd_cdc_if.h"
@@ -22,7 +9,7 @@
 #define RX_SIZE     1024u           /* power of two */
 #define TX_SIZE     4096u           /* power of two */
 #define TX_CHUNK    512u
-#define TX_WAIT_MS  100u            /* if the PC stops reading, give up after this */
+#define TX_WAIT_MS  100u            /* give up if the PC stops reading */
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
@@ -35,7 +22,7 @@ static volatile bool rxPaused;
 
 static uint8_t txRing[TX_SIZE];
 static uint32_t txHead, txTail;     /* main loop only */
-static uint8_t txChunk[TX_CHUNK];   /* the transfer in progress is sent from here */
+static uint8_t txChunk[TX_CHUNK];   /* data being sent */
 
 static volatile bool portOpen, justOpened;
 static uint8_t lineCoding[7] = {0x00, 0xC2, 0x01, 0x00, 0, 0, 8};  /* 115200 8N1, unused */
@@ -54,7 +41,7 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS = {
     CDC_TransmitCplt_FS,
 };
 
-/* ---- USB interrupt ------------------------------------------------------- */
+/* ---- USB interrupt ---- */
 
 static int8_t CDC_Init_FS(void)
 {
@@ -85,7 +72,7 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t *pbuf, uint16_t length)
         break;
 
     case CDC_SET_CONTROL_LINE_STATE: {
-        /* bit 0 of wValue is DTR, raised while a terminal has the port open */
+        /* DTR: a terminal has the port open */
         bool dtr = (((USBD_SetupReqTypedef *)pbuf)->wValue & 0x01u) != 0u;
         if (dtr && !portOpen)
             justOpened = true;
@@ -137,7 +124,7 @@ uint8_t CDC_Transmit_FS(uint8_t *Buf, uint16_t Len)
     return USBD_CDC_TransmitPacket(&hUsbDeviceFS);
 }
 
-/* ---- main loop ----------------------------------------------------------- */
+/* ---- Main loop ---- */
 
 static bool configured(void)
 {
@@ -207,7 +194,7 @@ void vcp_write(const char *s, size_t len)
             while (txHead - txTail >= TX_SIZE && HAL_GetTick() - start < TX_WAIT_MS)
                 vcp_poll();
             if (txHead - txTail >= TX_SIZE)
-                return;                 /* the PC isn't reading: drop the rest */
+                return;                 /* PC isn't reading: drop the rest */
         }
         if (!vcp_open())
             return;

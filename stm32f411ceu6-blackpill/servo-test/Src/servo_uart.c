@@ -1,25 +1,11 @@
-/**
- * @file    servo_uart.c
- * @brief   The servo's one-wire bus: USART2 in half-duplex mode on PA2,
- *          1 Mbaud 8N1, register level.
- *
- * Sending: the request goes out byte after byte with interrupts off (about
- * 10 us a byte), with PA2 driving the line both ways (push-pull) for clean
- * edges. Then PA2 lets go of the line (open-drain, pull-up) and the
- * receiver is turned on, so our own bytes aren't read back.
- *
- * Receiving: DMA1 stream 5 (channel 4, USART2_RX) copies the reply into a
- * buffer, so a USB interrupt can't make us miss a byte. The reply is done
- * when the line has been quiet for REPLY_GAP_US after the last byte.
- *
- * Timing uses the core's cycle counter (DWT->CYCCNT).
- */
+/* The servo bus: USART2 half-duplex on PA2, 1 Mbaud 8N1. Sends with PA2
+ * push-pull, then receives the reply by DMA (DMA1 stream 5). */
 #include "main.h"
 #include "servo.h"
 
 #define SERVO_BAUD          1000000u
 #define SERVO_PIN           2u          /* PA2, USART2_TX (AF7) */
-#define REPLY_GAP_US        100u        /* quiet this long after a byte: reply finished */
+#define REPLY_GAP_US        100u        /* line quiet this long: reply finished */
 
 static uint8_t rxDma[64];
 
@@ -38,16 +24,14 @@ void servo_port_init(void)
     DWT->CYCCNT = 0;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
-    /* USART2: 8N1, half-duplex (TX pin only), receive by DMA. The receiver
-     * is only on while waiting for a reply. */
+    /* USART2: 8N1, half-duplex, receive by DMA. */
     USART2->CR1 = 0;
     USART2->CR2 = 0;
     USART2->CR3 = USART_CR3_HDSEL | USART_CR3_DMAR;
     USART2->BRR = (HAL_RCC_GetPCLK1Freq() + SERVO_BAUD / 2u) / SERVO_BAUD;   /* 48 MHz / 1 M = 48 */
     USART2->CR1 = USART_CR1_UE | USART_CR1_TE;
 
-    /* PA2: AF7, open-drain with pull-up while idle, high speed. Set up after
-     * the USART so the line goes straight to idle (high). */
+    /* PA2: AF7, open-drain with pull-up while idle. */
     GPIOA->AFR[0] = (GPIOA->AFR[0] & ~(0xFu << (4u * SERVO_PIN))) | (7u << (4u * SERVO_PIN));
     GPIOA->OTYPER |= 1u << SERVO_PIN;
     GPIOA->OSPEEDR |= 3u << (2u * SERVO_PIN);
@@ -68,7 +52,7 @@ static void rx_stop(void)
     }
     DMA1->HIFCR = DMA_HIFCR_CTCIF5 | DMA_HIFCR_CHTIF5 | DMA_HIFCR_CTEIF5 |
                   DMA_HIFCR_CDMEIF5 | DMA_HIFCR_CFEIF5;
-    (void)USART2->SR;                   /* clear any overrun / framing flags */
+    (void)USART2->SR;                   /* clear error flags */
     (void)USART2->DR;
 }
 

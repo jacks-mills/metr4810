@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-# Motor test for the PCB (STM32F401VCT6): serial commands for the arm motor
-# on J1 and status LEDs on J5. Standalone: no CubeMX, no HAL, no FreeRTOS.
+# Motor test for the PCB (STM32F401VCT6).
 #     cmake --preset Debug && cmake --build --preset Debug
 
 set(CMAKE_C_STANDARD 11)
@@ -22,8 +21,11 @@ add_executable(${CMAKE_PROJECT_NAME}
     startup_stm32f401xc.s
     Src/system_stm32f4xx.c
     Src/main.c
+    Src/servo.c
 )
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE cmsis)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE cmsis Inc)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE STM32F401xC)
-set_source_files_properties(Src/main.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wshadow;-Wconversion;-Wno-sign-conversion")
+# main.c is always optimised: the software console's interrupt needs it.
+set_source_files_properties(Src/main.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wshadow;-Wconversion;-Wno-sign-conversion;-O2")
+set_source_files_properties(Src/servo.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")

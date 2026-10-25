@@ -1,7 +1,4 @@
-/**
- * @file    vcp.h
- * @brief   The USB serial port (CDC) as a text console.
- */
+/* The USB serial port (CDC) as a text console. */
 #ifndef VCP_H
 #define VCP_H
 
