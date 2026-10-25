@@ -161,13 +161,21 @@ static void fmt_drill(const struct UiData *d, char *t, size_t n, const char **st
 static void fmt_arm(const struct UiData *d, char *t, size_t n, const char **style)
 {
     const char *motion = "stopped";
+    bool pulsing = d->state.drivePulsing && d->state.driveMotion != DRIVE_STOPPED;
     if (d->state.driveMotion == DRIVE_EXTENDING)
-        motion = "extending";
+        motion = pulsing ? "pulse out" : "extending";
     else if (d->state.driveMotion == DRIVE_RETRACTING)
-        motion = "retracting";
-    snprintf(t, n, "%-10s %3u%%", motion, d->state.driveSpeed);
+        motion = pulsing ? "pulse in" : "retracting";
+    snprintf(t, n, "%-10s %3u%%", motion, pulsing ? 100u : d->state.driveSpeed);
     if (d->state.driveMotion != DRIVE_STOPPED)
         *style = S_CYAN;
+}
+
+static void fmt_timeout(const struct UiData *d, char *t, size_t n, const char **style)
+{
+    (void)style;
+    uint32_t ms = d->state.driveTimeoutMs;
+    snprintf(t, n, "%lu.%lu s", (unsigned long)(ms / 1000u), (unsigned long)(ms % 1000u / 100u));
 }
 
 static void fmt_limits(const struct UiData *d, char *t, size_t n, const char **style)
@@ -266,7 +274,7 @@ enum FieldId {
     F_SIM, F_UPTIME,
     F_MODE, F_STEP, F_SAFETY,
     F_DRILL, F_DEBUG,
-    F_ARM, F_LIMITS,
+    F_ARM, F_LIMITS, F_TIMEOUT,
     F_ANGLE, F_TARGET, F_ROTATION_STATE,
     F_SERVO, F_HEAP, F_STACKS,
     FIELD_COUNT
@@ -283,6 +291,7 @@ static const struct Field fields[FIELD_COUNT] = {
     [F_DEBUG]          = { ROW_DRILL,     61,  3, false, fmt_debug },
     [F_ARM]            = { ROW_ARM,       12, 15, false, fmt_arm },
     [F_LIMITS]         = { ROW_ARM,       30, 18, false, fmt_limits },
+    [F_TIMEOUT]        = { ROW_ARM,       61,  8, false, fmt_timeout },
     [F_ANGLE]          = { ROW_ROTATION,  12, 10, false, fmt_angle },
     [F_TARGET]         = { ROW_ROTATION,  24, 28, false, fmt_target },
     [F_ROTATION_STATE] = { ROW_ROTATION,  53, 10, false, fmt_rotation_state },
@@ -300,6 +309,7 @@ static const struct Label labels[] = {
     { ROW_DRILL,     2, false, S_NONE, "Drill" },
     { ROW_DRILL,    53, false, S_NONE, "Debug" },
     { ROW_ARM,       2, false, S_NONE, "Arm" },
+    { ROW_ARM,      53, false, S_NONE, "Timeout" },
     { ROW_ROTATION,  2, false, S_NONE, "Rotation" },
     { ROW_SERVO,     2, true,  S_NONE, "Servo" },
     { ROW_HEAP,      2, true,  S_NONE, "Heap" },

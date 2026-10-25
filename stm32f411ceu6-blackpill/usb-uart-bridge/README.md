@@ -61,9 +61,11 @@ missing.
 
 ## The PCB robot through the bridge
 
-The robot draws its screen once at start-up, and the bridge throws away
-anything that arrives while no terminal has the port open. Open the terminal,
-then press **Ctrl-L** to redraw the screen.
+The robot draws its screen once at start-up. The bridge keeps the newest
+3 KB the PCB sends while no terminal has the port open, and sends it when you
+open one, so the start-up screen appears even if you open picocom after
+flashing or resetting the PCB. If the screen looks wrong (or the window size
+changed), press **Ctrl-L** to redraw it.
 
 ## LED (PC13)
 
@@ -80,8 +82,8 @@ then press **Ctrl-L** to redraw the screen.
   up, so even a big paste arrives complete.
 - **Target to PC:** 4 KB of buffer. If the PC stops reading for long enough
   (0.35 s at 115200) the newest bytes are dropped. While no terminal has the
-  port open (DTR low), everything from the target is thrown away, so
-  opening the port never replays old output.
+  port open (DTR low), the newest 3 KB from the target is kept and sent when
+  one opens it. Older output is dropped.
 - **Formats:** 1500 to 6000000 baud; 8N1, 8E1, 8O1, 7E1 or 7O1; 1, 1.5 or 2
   stop bits. Anything else is ignored and the previous format kept.
 - **Debugger:** `bridgeStats` counts dropped bytes and rejected formats;

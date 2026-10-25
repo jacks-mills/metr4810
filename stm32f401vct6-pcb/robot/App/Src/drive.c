@@ -1,14 +1,23 @@
 /**
  * @file    drive.c
- * @brief   Arm drive logic: run to a limit switch, soft start, timeout.
+ * @brief   Arm drive logic: run to a limit switch, soft start, timeout, and
+ *          timed full-power pulses.
  *
  * A goal goes through:
  *   PAUSING   motor off for DRIVE_REVERSE_PAUSE_MS (only when reversing)
  *   RUNNING   ramping up to state.driveSpeed over DRIVE_RAMP_MS, then holding
  * and ends when the target switch is pressed, a STOP or new goal arrives, or
- * DRIVE_TIMEOUT_MS passes. The limit switch interrupt (drive_hw_limit_isr)
- * cuts the motor the instant the switch closes; this code then notices on
- * its next tick and reports the result.
+ * the timeout passes (state.driveTimeoutMs, set with 'drive timeout'; a
+ * change applies at once, counted from the goal's start). The limit switch
+ * interrupt (drive_hw_limit_isr) cuts the motor the instant the switch
+ * closes; this code then notices on its next tick and reports the result.
+ *
+ * A pulse goal ('pulse extend <ms>') skips the soft start: the motor goes to
+ * 100 % (E held high, no PWM) as soon as it's RUNNING, and stops pulseMs
+ * later. The task ticks at that exact moment (drive_logic_pulse_end), so the
+ * length is right to the millisecond. The limit switches and STOP still end
+ * it early; the timeout doesn't apply. A new pulse in the same direction
+ * while one is running restarts the time from now, with no gap.
  */
 #include "config.h"
 #include "command.h"
@@ -16,6 +25,8 @@
 #include "drive_hw.h"
 #include "log.h"
 #include "robot_state.h"
+
+#define PULSE_DUTY      100     /* full power: E stays high */
 
 enum Phase {
     PHASE_IDLE,
@@ -28,6 +39,9 @@ static enum DriveMotion target;     /* DRIVE_EXTENDING or DRIVE_RETRACTING */
 static uint32_t goalId;
 static uint32_t goalStart;          /* for the timeout */
 static uint32_t phaseStart;         /* for the pause and the ramp */
+static bool pulse;                  /* the current goal is a pulse */
+static uint32_t pulseMs;
+static uint32_t pulseEnd;           /* set when the pulse starts RUNNING */
 static bool switchErrorShown;
 
 static void report(enum DriveResult result, uint32_t id)
@@ -46,12 +60,31 @@ static void read_switches(void)
     state.atExtMax = drive_hw_at_max();
 }
 
+static void set_pulse(bool on)
+{
+    pulse = on;
+    state.drivePulsing = on;
+}
+
 static void finish(enum DriveResult result)
 {
     drive_hw_off();
     phase = PHASE_IDLE;
     state.driveMotion = DRIVE_STOPPED;
+    set_pulse(false);
     report(result, goalId);
+}
+
+/* Motor on. A pulse starts at full power straight away; a normal move ramps
+ * up from the next tick. */
+static void start_running(uint32_t now)
+{
+    phase = PHASE_RUNNING;
+    phaseStart = now;
+    if (pulse) {
+        pulseEnd = now + pulseMs;
+        drive_hw_set(target, PULSE_DUTY);
+    }
 }
 
 void drive_logic_init(uint32_t now)
@@ -59,14 +92,17 @@ void drive_logic_init(uint32_t now)
     (void)now;
     phase = PHASE_IDLE;
     state.driveMotion = DRIVE_STOPPED;
+    set_pulse(false);
     read_switches();
 }
 
-void drive_logic_goal(enum DriveGoal goal, uint32_t id, uint32_t now)
+void drive_logic_goal(enum DriveGoal goal, uint32_t ms, uint32_t id, uint32_t now)
 {
-    enum DriveMotion newTarget = (goal == DRIVE_GOAL_EXTEND) ? DRIVE_EXTENDING
-                               : (goal == DRIVE_GOAL_RETRACT) ? DRIVE_RETRACTING
-                               : DRIVE_STOPPED;
+    enum DriveMotion newTarget =
+        (goal == DRIVE_GOAL_EXTEND || goal == DRIVE_GOAL_PULSE_EXTEND) ? DRIVE_EXTENDING
+      : (goal == DRIVE_GOAL_RETRACT || goal == DRIVE_GOAL_PULSE_RETRACT) ? DRIVE_RETRACTING
+      : DRIVE_STOPPED;
+    bool newPulse = (goal == DRIVE_GOAL_PULSE_EXTEND || goal == DRIVE_GOAL_PULSE_RETRACT);
     bool wasActive = (phase != PHASE_IDLE);
     /* if the motor was on (or only just switched off), pause before reversing */
     uint32_t pauseFrom = (phase == PHASE_PAUSING) ? phaseStart : now;
@@ -79,11 +115,21 @@ void drive_logic_goal(enum DriveGoal goal, uint32_t id, uint32_t now)
             report(DRIVE_RESULT_STOPPED, goalId);
             goalId = id;
             goalStart = now;
+            bool wasPulse = pulse;
+            set_pulse(newPulse);
+            pulseMs = ms;
+            if (phase == PHASE_RUNNING) {
+                if (newPulse)
+                    start_running(now);             /* full power from now for ms */
+                else if (wasPulse)
+                    phaseStart = now - DRIVE_RAMP_MS;   /* already moving: no soft start */
+            }
             return;
         }
         drive_hw_off();
         phase = PHASE_IDLE;
         state.driveMotion = DRIVE_STOPPED;
+        set_pulse(false);
         report(DRIVE_RESULT_STOPPED, goalId);
     }
 
@@ -103,10 +149,24 @@ void drive_logic_goal(enum DriveGoal goal, uint32_t id, uint32_t now)
 
     target = newTarget;
     goalStart = now;
-    phaseStart = wasActive ? pauseFrom : now;
-    phase = wasActive ? PHASE_PAUSING : PHASE_RUNNING;    /* reversing: stop first */
+    set_pulse(newPulse);
+    pulseMs = ms;
     state.driveMotion = target;
-    log_debug("drive: %s", target == DRIVE_EXTENDING ? "extending" : "retracting");
+    if (wasActive) {
+        phase = PHASE_PAUSING;                  /* reversing: stop first */
+        phaseStart = pauseFrom;
+    } else {
+        start_running(now);
+    }
+    log_debug("drive: %s%s", pulse ? "pulse " : "", target == DRIVE_EXTENDING ? "extending" : "retracting");
+}
+
+bool drive_logic_pulse_end(uint32_t *when)
+{
+    if (phase != PHASE_RUNNING || !pulse)
+        return false;
+    *when = pulseEnd;
+    return true;
 }
 
 void drive_logic_tick(uint32_t now)
@@ -131,7 +191,7 @@ void drive_logic_tick(uint32_t now)
         finish(DRIVE_RESULT_REACHED);
         return;
     }
-    if (now - goalStart >= DRIVE_TIMEOUT_MS) {
+    if (!pulse && now - goalStart >= state.driveTimeoutMs) {
         finish(DRIVE_RESULT_TIMEOUT);
         return;
     }
@@ -139,8 +199,15 @@ void drive_logic_tick(uint32_t now)
     if (phase == PHASE_PAUSING) {
         if (now - phaseStart < DRIVE_REVERSE_PAUSE_MS)
             return;
-        phase = PHASE_RUNNING;
-        phaseStart = now;
+        start_running(now);
+    }
+
+    if (pulse) {
+        if ((int32_t)(now - pulseEnd) >= 0)
+            finish(DRIVE_RESULT_PULSE_DONE);
+        else
+            drive_hw_set(target, PULSE_DUTY);
+        return;
     }
 
     /* soft start, then whatever speed is set (it can change while moving) */

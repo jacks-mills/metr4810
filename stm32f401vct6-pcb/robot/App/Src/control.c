@@ -71,6 +71,13 @@ static const char *deg(char *buf, size_t size, int32_t tenths)
     return buf;
 }
 
+/* ms -> "12.5" (seconds) */
+static const char *secs(char *buf, size_t size, uint32_t ms)
+{
+    snprintf(buf, size, "%lu.%lu", (unsigned long)(ms / 1000u), (unsigned long)(ms % 1000u / 100u));
+    return buf;
+}
+
 static const char *source_text(const struct Command *cmd)
 {
     switch (cmd->source) {
@@ -101,7 +108,7 @@ static void drill(bool on)
     drill_set(on, state.drillSpeed);
 }
 
-static void drive(enum DriveGoal goal)
+static void drive_goal(enum DriveGoal goal, uint32_t pulseMs)
 {
     uint32_t id = nextGoalId++;
     if (goal != DRIVE_GOAL_STOP) {
@@ -109,10 +116,15 @@ static void drive(enum DriveGoal goal)
         driveGoal = goal;
     }
     driveBusy = (goal != DRIVE_GOAL_STOP);
-    if (!drive_send(goal, id)) {
+    if (!drive_send(goal, pulseMs, id)) {
         driveBusy = false;
         log_error("Drive task not responding");
     }
+}
+
+static void drive(enum DriveGoal goal)
+{
+    drive_goal(goal, 0);
 }
 
 static void rotate(enum RotateGoalType type, int32_t angle, int32_t angle2)
@@ -247,17 +259,23 @@ static void start_sequence(bool fromTheTop, const struct Command *cmd, uint32_t 
 /* Manual moves                                                               */
 /* ------------------------------------------------------------------------- */
 
+/* A pulse runs at full power whatever the drive speed is. */
+static bool may_pulse_extend(void)
+{
+    if (state.safetyEnabled && rotateBusy) {
+        log_warn("Safety: can't extend while the base is rotating");
+        return false;
+    }
+    return true;
+}
+
 static bool may_extend(void)
 {
     if (state.driveSpeed == 0) {
         log_warn("Drive speed is 0");
         return false;
     }
-    if (state.safetyEnabled && rotateBusy) {
-        log_warn("Safety: can't extend while the base is rotating");
-        return false;
-    }
-    return true;
+    return may_pulse_extend();
 }
 
 static bool may_rotate(void)
@@ -307,7 +325,8 @@ static void drive_result(enum DriveResult result, uint32_t id, uint32_t now)
         return;                         /* a goal that was since replaced */
     driveBusy = false;
 
-    bool extending = (driveGoal == DRIVE_GOAL_EXTEND);
+    bool extending = (driveGoal == DRIVE_GOAL_EXTEND || driveGoal == DRIVE_GOAL_PULSE_EXTEND);
+    char s[12], text[LOG_TEXT_SIZE];
     switch (result) {
     case DRIVE_RESULT_REACHED:
         log_info("Arm at %s", extending ? "EXT_MAX" : "EXT_MIN");
@@ -316,16 +335,20 @@ static void drive_result(enum DriveResult result, uint32_t id, uint32_t now)
             advance(now);
         break;
     case DRIVE_RESULT_TIMEOUT:
-        if (state.mode == MODE_AUTO)
-            fault(extending ? "Arm didn't reach EXT_MAX in time (DRIVE_TIMEOUT_MS)"
-                            : "Arm didn't reach EXT_MIN in time (DRIVE_TIMEOUT_MS)");
-        else
-            log_warn("Arm stopped: no limit switch within DRIVE_TIMEOUT_MS");
+        secs(s, sizeof s, state.driveTimeoutMs);
+        if (state.mode == MODE_AUTO) {
+            snprintf(text, sizeof text, "Arm didn't reach %s within %s s ('drive timeout' to change)",
+                     extending ? "EXT_MAX" : "EXT_MIN", s);
+            fault(text);
+        } else {
+            log_warn("Arm stopped: no limit switch within %s s ('drive timeout')", s);
+        }
         break;
     case DRIVE_RESULT_SWITCH_ERROR:
         fault("Both limit switches read pressed: check the wiring");
         break;
     case DRIVE_RESULT_STOPPED:
+    case DRIVE_RESULT_PULSE_DONE:
         break;
     }
 }
@@ -366,6 +389,7 @@ void control_init(uint32_t now)
     state.simulated = HW_SIMULATED;
     state.drillSpeed = DEFAULT_DRILL_SPEED;
     state.driveSpeed = DEFAULT_DRIVE_SPEED;
+    state.driveTimeoutMs = DRIVE_TIMEOUT_MS;
     state.rotateSpeed = DEFAULT_ROTATE_SPEED;
 
     log_info("Boring robot ready. Type 'help' for commands, Esc to stop.");
@@ -503,8 +527,23 @@ void control_command(const struct Command *cmd, uint32_t now)
         drive(DRIVE_GOAL_STOP);
         break;
 
+    case CMD_DRIVE_PULSE_EXTEND:
+        if (may_pulse_extend())
+            drive_goal(DRIVE_GOAL_PULSE_EXTEND, (uint32_t)cmd->value);
+        break;
+
+    case CMD_DRIVE_PULSE_RETRACT:
+        drive_goal(DRIVE_GOAL_PULSE_RETRACT, (uint32_t)cmd->value);
+        break;
+
     case CMD_DRIVE_SET_SPEED:
         state.driveSpeed = (uint8_t)cmd->value;     /* the drive task picks it up */
+        break;
+
+    case CMD_DRIVE_SET_TIMEOUT:
+        /* the drive task picks it up too, even mid-move: counted from that move's start */
+        state.driveTimeoutMs = (uint32_t)cmd->value;
+        log_info("Arm drive timeout %s s", secs(a, sizeof a, state.driveTimeoutMs));
         break;
 
     case CMD_ROTATE_LEFT:

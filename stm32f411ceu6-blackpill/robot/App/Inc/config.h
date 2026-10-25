@@ -24,8 +24,9 @@
 #define LIMIT_ACTIVE_HIGH       1
 
 /* ---- Arm drive: FIT0492-B through the DRI0002 (E = PWM, M = direction) ----- */
+#define DRIVE_PWM_CHANNEL       TIM_CHANNEL_2   /* TIM3 channel on DRIVE_PWM (PA7); must match robot.ioc */
 #define DRIVE_DIR_EXTEND        0           /* M level that extends the arm; swap if it goes backwards */
-#define DRIVE_TIMEOUT_MS        30000       /* longest an extend or retract may take: measure, then set ~1.5x */
+#define DRIVE_TIMEOUT_MS        30000       /* longest an extend or retract may take, at power-up; 'drive timeout <s>' changes it */
 #define DRIVE_RAMP_MS           300         /* soft start from 0 to the set speed */
 #define DRIVE_REVERSE_PAUSE_MS  150         /* stopped this long before changing direction */
 

@@ -52,11 +52,13 @@ struct State {
     bool drillOn;
     uint8_t drillSpeed;
     uint8_t driveSpeed;
+    uint32_t driveTimeoutMs;    /* longest an extend or retract may take ('drive timeout') */
     uint8_t rotateSpeed;
     int16_t rotateTarget;
 
     /* ---- written by drive ---------------------------------------------- */
     enum DriveMotion driveMotion;
+    bool drivePulsing;          /* the move is a full-power pulse ('pulse extend') */
     bool atExtMin;
     bool atExtMax;
 

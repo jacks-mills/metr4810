@@ -2,9 +2,9 @@
  * @file    drive_hw.h
  * @brief   Arm drive motor and limit switches, at the pin level.
  *
- * FIT0492-B gear motor through the DRI0002 (L298N): DRIVE_PWM (TIM3 CH2) is
- * the E input (speed), DRIVE_DIR is the M input (direction). EXT_MIN and
- * EXT_MAX are the arm's limit switches.
+ * FIT0492-B gear motor through the DRI0002 (L298N): DRIVE_PWM (TIM3, on the
+ * channel DRIVE_PWM_CHANNEL in config.h) is the E input (speed), DRIVE_DIR is
+ * the M input (direction). EXT_MIN and EXT_MAX are the arm's limit switches.
  *
  * Only the drive task calls these, except drive_hw_off() and
  * drive_hw_limit_isr(), which are safe from interrupts and fault handlers.

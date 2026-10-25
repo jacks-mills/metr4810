@@ -67,7 +67,7 @@ void Error_Handler(void);
 #define EXT_MIN_Pin GPIO_PIN_3
 #define EXT_MIN_GPIO_Port GPIOC
 #define EXT_MIN_EXTI_IRQn EXTI3_IRQn
-#define DRIVE_PWM_Pin GPIO_PIN_7
+#define DRIVE_PWM_Pin GPIO_PIN_6
 #define DRIVE_PWM_GPIO_Port GPIOA
 #define START_BUTTON_Pin GPIO_PIN_4
 #define START_BUTTON_GPIO_Port GPIOC
@@ -82,7 +82,7 @@ void Error_Handler(void);
 #define LED_GREEN_GPIO_Port GPIOD
 #define LED_START_Pin GPIO_PIN_3
 #define LED_START_GPIO_Port GPIOD
-#define DRIVE_DIR_Pin GPIO_PIN_1
+#define DRIVE_DIR_Pin GPIO_PIN_0
 #define DRIVE_DIR_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */

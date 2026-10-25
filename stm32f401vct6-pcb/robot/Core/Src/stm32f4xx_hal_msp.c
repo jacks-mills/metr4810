@@ -115,7 +115,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     /**TIM3 GPIO Configuration
-    PA7     ------> TIM3_CH2
+    PA6     ------> TIM3_CH1
     PB0     ------> TIM3_CH3
     */
     GPIO_InitStruct.Pin = DRIVE_PWM_Pin;

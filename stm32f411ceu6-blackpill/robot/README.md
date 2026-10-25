@@ -68,8 +68,13 @@ switches "close" at the ends, and a virtual ST3215 answers on the servo link.
 1. **Directions:** with the arm clear, `drive extend` should move the arm out.
    If it goes in, flip `DRIVE_DIR_EXTEND` in `config.h`. Likewise
    `SERVO_REVERSED` if `rotate right` turns the plate left.
-2. **Travel time:** time a full extend at your drive speed and set
-   `DRIVE_TIMEOUT_MS` to about 1.5 times that (it's 30 s for now).
+2. **Travel time:** time a full extend at your drive speed, then set the
+   timeout to about 1.5 times that from the terminal: `drive timeout 20`
+   (seconds, 1 to 600, one decimal allowed). It covers both extend and
+   retract, shows on the Arm row, and can be changed while the arm moves
+   (counted from the start of that move), but not while the sequence runs.
+   It goes back to `DRIVE_TIMEOUT_MS` in `config.h` (30 s) at every reset,
+   so put your number there too once you're happy with it.
 3. **Servo centre and limits** (saved in the servo, so once per servo):
    ```
    debug on
@@ -90,6 +95,15 @@ Ctrl-L redraws. `start` runs (or continues) the sequence: retract to EXT_MIN,
 drill on, extend to EXT_MAX, retract to EXT_MIN, drill off. `pause` gives you
 manual control; `start` then carries on from the same step.
 
+**Pulsing the arm:** `pulse extend 200` or `pulse retract 200` runs the arm
+at full power (the DRI0002's E input held high, no PWM) for that many
+milliseconds (1 to 10000), then stops. It's for moving the arm in steps while
+the PWM speed control doesn't work with the driver: press Up then Enter to
+repeat. The length is exact to the millisecond, the drive speed is ignored,
+and the limit switches and Esc still stop it. A pulse in the same direction
+while one is running carries on from now with no gap; reversing waits
+150 ms first. Not accepted while the sequence runs.
+
 While the sequence runs only `pause`, `stop` and `debug` are accepted. With
 safety on (the default), the base only rotates with the arm stopped at
 EXT_MIN, and the arm won't extend while the base is rotating.
@@ -109,7 +123,7 @@ the reason in `faultReason`.
 | `App/` | All our code. CubeMX never touches it. New `.c` files go in `App/app.cmake` |
 | `App/Inc/config.h` | Pins' polarities, timeouts, speeds, servo settings, `HW_SIMULATED` |
 | `App/Src/control.c` | Modes, command rules, safety interlock, the sequence |
-| `App/Src/drive.c`, `drive_hw.c` | Arm drive: run to a limit switch, soft start, timeout; pins |
+| `App/Src/drive.c`, `drive_hw.c` | Arm drive: run to a limit switch, soft start, timeout, timed pulses; pins |
 | `App/Src/drill.c` | Drill PWM (no task: control calls it) |
 | `App/Src/rotate.c`, `servo.c`, `servo_uart.c` | Base rotation: goals and polling; ST3215 protocol; USART2 link |
 | `App/Src/sim.c`, `servo_sim.c` | Simulated arm, drill and servo (`HW_SIMULATED`) |

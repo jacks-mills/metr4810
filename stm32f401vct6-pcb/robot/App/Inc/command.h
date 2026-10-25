@@ -32,11 +32,14 @@ enum CommandType {
     CMD_DRILL_STOP,
     CMD_DRILL_SET_SPEED,
 
-    /* arm drive; value: speed 0-100 % */
+    /* arm drive; value: speed 0-100 %, or timeout in ms */
     CMD_DRIVE_EXTEND,
     CMD_DRIVE_RETRACT,
     CMD_DRIVE_STOP,
     CMD_DRIVE_SET_SPEED,
+    CMD_DRIVE_SET_TIMEOUT,
+    CMD_DRIVE_PULSE_EXTEND,     /* value: ms at full power */
+    CMD_DRIVE_PULSE_RETRACT,
 
     /* base rotation; value: angle in tenths of a degree, or speed 0-100 % */
     CMD_ROTATE_LEFT,

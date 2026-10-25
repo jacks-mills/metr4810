@@ -77,8 +77,8 @@ sequence.
 
 | Function | Pin | Schematic net | CubeMX label | Notes |
 |---|---|---|---|---|
-| Arm drive PWM | PA7 (TIM3 CH2) | RIGHT_PWM | DRIVE_PWM | DRI0002 E, 20 kHz |
-| Arm drive direction | PE1 | RIGHT_DIR | DRIVE_DIR | DRI0002 M |
+| Arm drive PWM | PA6 (TIM3 CH1) | LEFT_PWM | DRIVE_PWM | DRI0002 E, 20 kHz (left motor header) |
+| Arm drive direction | PE0 | LEFT_DIR | DRIVE_DIR | DRI0002 M (left motor header) |
 | Drill PWM | PB0 (TIM3 CH3) | DRILL_PWM | DRILL_PWM | FIT0441, inverted (polarity Low) |
 | Drill direction | PE2 | DRILL_DIR | DRILL_DIR | high = forward |
 | EXT_MAX | PC2 (EXTI2) | EXT_MAX | EXT_MAX | switch to 3.3 V, pull-down, both edges |
@@ -89,8 +89,10 @@ sequence.
 | LEDs | PD0, PD1, PD2, PD3 | red, orange, green, start | LED_RED, LED_ORANGE, LED_GREEN, LED_START | lit when high (see below) |
 | SWD | PA13, PA14 | | | |
 
-Not used: LEFT_PWM (PA6), LEFT_DIR (PE0), the FG inputs (PA0, PA1),
-LEFT_MIN/RIGHT_MIN (PC0, PC1), I2C1, SPI2.
+Not used: RIGHT_PWM (PA7), RIGHT_DIR (PE1), the FG inputs (PA0, PA1),
+LEFT_MIN/RIGHT_MIN (PC0, PC1), I2C1, SPI2. The arm moved from the right
+motor header to the left one on 25 Oct. Its TIM3 channel is set in two
+places that must agree: `robot.ioc` and `DRIVE_PWM_CHANNEL` in `config.h`.
 
 - **Servo:** the ST3215's signal wire goes to PA2, with a 1–2.2 kΩ pull-up to
   3.3 V. The servo needs its own 12 V supply, with GND shared with the board.
@@ -114,14 +116,19 @@ LEFT_MIN/RIGHT_MIN (PC0, PC1), I2C1, SPI2.
 2. **Switch wiring:** check the limit switches and start button against the
    schematic (see Pins).
 3. **Motors during reset:** while the F401 is held in reset or being flashed,
-   PA7 and PB0 float. Check that the arm (DRI0002 E) and the drill don't move
+   PA6 and PB0 float. Check that the arm (DRI0002 E) and the drill don't move
    then. The FIT0441 runs flat out on a low PWM input. If either moves, add
-   a pull-down on RIGHT_PWM or a pull-up (e.g. 10 kΩ to 3.3 V) on DRILL_PWM.
+   a pull-down on LEFT_PWM or a pull-up (e.g. 10 kΩ to 3.3 V) on DRILL_PWM.
 4. **Directions:** with the arm clear, `drive extend` should move the arm out.
    If it goes in, flip `DRIVE_DIR_EXTEND` in `config.h`. Likewise
    `SERVO_REVERSED` if `rotate right` turns the plate left.
-5. **Travel time:** time a full extend at your drive speed and set
-   `DRIVE_TIMEOUT_MS` to about 1.5 times that (it's 30 s for now).
+5. **Travel time:** time a full extend at your drive speed, then set the
+   timeout to about 1.5 times that from the terminal: `drive timeout 20`
+   (seconds, 1 to 600, one decimal allowed). It covers both extend and
+   retract, shows on the Arm row, and can be changed while the arm moves
+   (counted from the start of that move), but not while the sequence runs.
+   It goes back to `DRIVE_TIMEOUT_MS` in `config.h` (30 s) at every reset,
+   so put your number there too once you're happy with it.
 6. **Servo centre and limits** (saved in the servo, so once per servo; skip
    if it was already done on the Blackpill):
    ```
@@ -147,6 +154,15 @@ sequence: retract to EXT_MIN, drill on, extend to EXT_MAX, retract to
 EXT_MIN, drill off. `pause` gives you manual control; `start` then carries on
 from the same step.
 
+**Pulsing the arm:** `pulse extend 200` or `pulse retract 200` runs the arm
+at full power (the DRI0002's E input held high, no PWM) for that many
+milliseconds (1 to 10000), then stops. It's for moving the arm in steps while
+the PWM speed control doesn't work with the driver: press Up then Enter to
+repeat. The length is exact to the millisecond, the drive speed is ignored,
+and the limit switches and Esc still stop it. A pulse in the same direction
+while one is running carries on from now with no gap; reversing waits
+150 ms first. Not accepted while the sequence runs.
+
 While the sequence runs only `pause`, `stop` and `debug` are accepted. With
 safety on (the default), the base only rotates with the arm stopped at
 EXT_MIN, and the arm won't extend while the base is rotating.
@@ -161,7 +177,7 @@ heap, and each task's unused stack in words (the unit CubeMX uses).
 | `App/` | All our code. CubeMX never touches it. New `.c` files go in `App/app.cmake` |
 | `App/Inc/config.h` | Pins' polarities, timeouts, speeds, servo settings, `HW_SIMULATED` |
 | `App/Src/control.c` | Modes, command rules, safety interlock, the sequence |
-| `App/Src/drive.c`, `drive_hw.c` | Arm drive: run to a limit switch, soft start, timeout; pins |
+| `App/Src/drive.c`, `drive_hw.c` | Arm drive: run to a limit switch, soft start, timeout, timed pulses; pins |
 | `App/Src/drill.c` | Drill PWM (no task: control calls it) |
 | `App/Src/rotate.c`, `servo.c`, `servo_uart.c` | Base rotation: goals and polling; ST3215 protocol; USART2 link |
 | `App/Src/sim.c`, `servo_sim.c` | Simulated arm, drill and servo (`HW_SIMULATED`) |

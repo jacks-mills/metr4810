@@ -8,8 +8,6 @@
 #include "main.h"
 #include "drive_hw.h"
 
-#define DRIVE_CHANNEL   TIM_CHANNEL_2
-
 extern TIM_HandleTypeDef htim3;
 
 /* direction currently being driven; read by the limit switch interrupt */
@@ -23,14 +21,14 @@ static bool pressed(GPIO_TypeDef *port, uint16_t pin)
 
 void drive_hw_init(void)
 {
-    __HAL_TIM_SET_COMPARE(&htim3, DRIVE_CHANNEL, 0);
-    HAL_TIM_PWM_Start(&htim3, DRIVE_CHANNEL);
+    __HAL_TIM_SET_COMPARE(&htim3, DRIVE_PWM_CHANNEL, 0);
+    HAL_TIM_PWM_Start(&htim3, DRIVE_PWM_CHANNEL);
     driven = DRIVE_STOPPED;
 }
 
 void drive_hw_off(void)
 {
-    htim3.Instance->CCR2 = 0;           /* one register write: safe anywhere */
+    __HAL_TIM_SET_COMPARE(&htim3, DRIVE_PWM_CHANNEL, 0);    /* one register write: safe anywhere */
     driven = DRIVE_STOPPED;
 }
 
@@ -56,7 +54,7 @@ void drive_hw_set(enum DriveMotion motion, uint8_t dutyPercent)
 
     uint32_t period = __HAL_TIM_GET_AUTORELOAD(&htim3) + 1;
     driven = motion;
-    __HAL_TIM_SET_COMPARE(&htim3, DRIVE_CHANNEL, period * dutyPercent / 100);
+    __HAL_TIM_SET_COMPARE(&htim3, DRIVE_PWM_CHANNEL, period * dutyPercent / 100);
 }
 
 bool drive_hw_at_min(void)

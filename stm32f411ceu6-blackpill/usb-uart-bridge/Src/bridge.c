@@ -12,7 +12,9 @@
  * main loop sends them whenever the USB IN endpoint is free. The target can't
  * be held off, so if the PC stops reading for long enough (4 KB is 0.35 s at
  * 115200) the newest bytes are dropped and counted. While no terminal has
- * the port open they're thrown away, so opening it doesn't replay old output.
+ * the port open (or USB isn't connected), the newest KEEP_WHILE_CLOSED bytes
+ * are kept and sent as soon as a terminal opens it. So a screen the target
+ * drew at reset, before the terminal was opened, still arrives.
  *
  * Line coding: the baud rate, parity and stop bits the PC sets are applied
  * to USART1 once everything already queued for it has been sent.
@@ -31,6 +33,7 @@
 #define USB_PACKET      64u     /* full-speed bulk packet */
 #define UART_CHUNK_MAX  512u    /* bytes per UART DMA block */
 #define USB_CHUNK_MAX   1024u   /* bytes per USB IN transfer */
+#define KEEP_WHILE_CLOSED 3072u /* newest target output kept for when a terminal opens */
 
 #define LED_FLICKER_MS  40u     /* LED blinks off this long per burst of traffic */
 
@@ -123,9 +126,6 @@ void bridge_usb_get_line_coding_isr(uint8_t *coding)
 
 void bridge_uart_receive_isr(const uint8_t *data, uint32_t len)
 {
-    if (!portOpen)
-        return;             /* nobody listening */
-
     uint32_t head = toUsbHead;
     uint32_t space = TO_USB_SIZE - (head - toUsbTail);
     if (len > space) {
@@ -194,7 +194,10 @@ static void pump_to_uart(uint32_t now)
 static void pump_to_usb(uint32_t now, bool usbUp)
 {
     if (!usbUp || !portOpen) {
-        toUsbTail = toUsbHead;              /* nobody to send it to */
+        /* nobody to send it to yet: keep only the newest bytes */
+        uint32_t head = toUsbHead;
+        if (head - toUsbTail > KEEP_WHILE_CLOSED)
+            toUsbTail = head - KEEP_WHILE_CLOSED;
         return;
     }
 

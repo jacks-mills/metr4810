@@ -244,44 +244,66 @@ static void test_pc_stops_reading(void)
     printf("ok  PC stops reading: newest %u bytes dropped and counted\n", bridgeStats.toUsbDropped);
 }
 
-static void test_port_closed_discards(void)
+static void test_port_closed_keeps_newest(void)
 {
     reset_all();
-    uint8_t junk[100];
-    memset(junk, 'x', sizeof junk);
-    bridge_uart_receive_isr(junk, sizeof junk); /* no terminal open yet */
+
+    /* the target draws its screen at reset, before the terminal is opened */
+    static uint8_t screen[2500];
+    for (uint32_t i = 0; i < sizeof screen; i++)
+        screen[i] = pattern(i + 7);
+    bridge_uart_receive_isr(screen, 1000);
     for (int i = 0; i < 20; i++)
         poll();
-    assert(hostGotLen == 0);
+    bridge_uart_receive_isr(screen + 1000, 1500);
+    for (int i = 0; i < 20; i++)
+        poll();
+    assert(hostGotLen == 0);            /* nobody listening yet */
 
+    bridge_usb_line_state_isr(true);    /* terminal opened: the screen arrives */
+    for (int i = 0; i < 50; i++)
+        poll();
+    assert(hostGotLen == sizeof screen && memcmp(hostGot, screen, sizeof screen) == 0);
+
+    /* more than KEEP_WHILE_CLOSED while closed: only the newest 3072 kept */
+    bridge_usb_line_state_isr(false);
+    hostGotLen = 0;
+    static uint8_t lots[63 * 128];      /* 8064 bytes, in DMA-sized chunks */
+    for (uint32_t i = 0; i < sizeof lots; i++)
+        lots[i] = pattern(i + 3);
+    for (uint32_t done = 0; done < sizeof lots; done += 128) {   /* like the DMA interrupts */
+        bridge_uart_receive_isr(lots + done, 128);
+        poll();
+    }
     bridge_usb_line_state_isr(true);
-    bridge_uart_receive_isr((const uint8_t *)"hi", 2);
-    for (int i = 0; i < 20; i++)
+    for (int i = 0; i < 50; i++)
         poll();
-    assert(hostGotLen == 2 && memcmp(hostGot, "hi", 2) == 0);
-
-    bridge_usb_line_state_isr(false);   /* closed again */
-    bridge_uart_receive_isr(junk, sizeof junk);
-    for (int i = 0; i < 20; i++)
-        poll();
-    assert(hostGotLen == 2);
+    assert(hostGotLen == 3072 && memcmp(hostGot, lots + sizeof lots - 3072, 3072) == 0);
+    assert(bridgeStats.toUsbDropped == 0);
 
     /* typing without DTR (some programs) still opens the port */
+    bridge_usb_line_state_isr(false);
+    hostGotLen = 0;
     host_send((const uint8_t *)"a", 1);
     bridge_uart_receive_isr((const uint8_t *)"b", 1);
     for (int i = 0; i < 20; i++)
         poll();
-    assert(hostGotLen == 3 && hostGot[2] == 'b');
+    assert(hostGotLen == 1 && hostGot[0] == 'b');
 
-    /* unplugged: nothing queued for later */
+    /* unplugged, then plugged in and opened: the output in between arrives */
     usbConfigured = false;
-    bridge_uart_receive_isr(junk, sizeof junk);
+    bridge_usb_reset_isr();
+    bridge_uart_receive_isr((const uint8_t *)"boot", 4);
     poll();
     usbConfigured = true;
+    for (int i = 0; i < 5; i++)
+        poll();
+    assert(hostGotLen == 1);
+    bridge_usb_line_state_isr(true);
     for (int i = 0; i < 20; i++)
         poll();
-    assert(hostGotLen == 3);
-    printf("ok  nothing sent to the PC while no terminal is open\n");
+    assert(hostGotLen == 5 && memcmp(hostGot + 1, "boot", 4) == 0);
+    printf("ok  output while no terminal is open is kept (newest 3072 bytes) and sent on open\n");
 }
 
 static void test_line_coding(void)
@@ -355,7 +377,7 @@ int main(void)
     test_target_to_pc();
     test_wraparound_split_copy();
     test_pc_stops_reading();
-    test_port_closed_discards();
+    test_port_closed_keeps_newest();
     test_line_coding();
     test_usb_reset_while_paused();
     test_led();

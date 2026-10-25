@@ -4,7 +4,9 @@
  *
  * A command is one or two words, then any numbers:
  *     drill speed 60      rotate to -1.5      servo limits -2.5 2.5
- * Case doesn't matter. Angles are degrees with at most one decimal place.
+ *     drive timeout 12.5  pulse extend 200
+ * Case doesn't matter. Angles (degrees) and times (seconds) take at most one
+ * decimal place.
  *
  * To add a command: add it to enum CommandType (command.h), to syntax[] and
  * commandNames[] below, and to the help text.
@@ -20,12 +22,22 @@
 #define MAX_WORDS   6
 #define MAX_LINE    80
 
+/* drive timeout range, tenths of a second */
+#define TIMEOUT_MIN 10          /* 1 s */
+#define TIMEOUT_MAX 6000        /* 10 min */
+
+/* pulse length range, ms */
+#define PULSE_MIN   1
+#define PULSE_MAX   10000
+
 enum ArgKind {
     ARG_NONE,           /* no numbers */
     ARG_FIXED,          /* no numbers; value comes from the table (on/off) */
     ARG_PERCENT,        /* one number 0-100 */
     ARG_ANGLE,          /* one angle */
-    ARG_ANGLE_RANGE     /* two angles, min then max */
+    ARG_ANGLE_RANGE,    /* two angles, min then max */
+    ARG_SECONDS,        /* one time in seconds; value in ms */
+    ARG_MS              /* one whole number of ms (a pulse length) */
 };
 
 struct Syntax {
@@ -55,6 +67,10 @@ static const struct Syntax syntax[] = {
     { "drive",   "retract", CMD_DRIVE_RETRACT,    ARG_NONE,        0 },
     { "drive",   "stop",    CMD_DRIVE_STOP,       ARG_NONE,        0 },
     { "drive",   "speed",   CMD_DRIVE_SET_SPEED,  ARG_PERCENT,     0 },
+    { "drive",   "timeout", CMD_DRIVE_SET_TIMEOUT, ARG_SECONDS,    0 },
+
+    { "pulse",   "extend",  CMD_DRIVE_PULSE_EXTEND,  ARG_MS,       0 },
+    { "pulse",   "retract", CMD_DRIVE_PULSE_RETRACT, ARG_MS,       0 },
 
     { "rotate",  "left",    CMD_ROTATE_LEFT,      ARG_NONE,        0 },
     { "rotate",  "right",   CMD_ROTATE_RIGHT,     ARG_NONE,        0 },
@@ -76,7 +92,8 @@ static const struct {
     { "safety", "usage: safety on|off" },
     { "debug",  "usage: debug on|off" },
     { "drill",  "usage: drill start|stop|speed <0-100>" },
-    { "drive",  "usage: drive extend|retract|stop|speed <0-100>" },
+    { "drive",  "usage: drive extend|retract|stop|speed <0-100>|timeout <s>" },
+    { "pulse",  "usage: pulse extend|retract <ms>   (full power, then stop)" },
     { "rotate", "usage: rotate left|right|stop|to <deg>|speed <0-100>" },
     { "servo",  "usage: servo free|hold|centre|limits <min deg> <max deg>" },
 };
@@ -96,6 +113,9 @@ static const char *const commandNames[CMD_COUNT] = {
     [CMD_DRIVE_RETRACT]    = "drive retract",
     [CMD_DRIVE_STOP]       = "drive stop",
     [CMD_DRIVE_SET_SPEED]  = "drive speed",
+    [CMD_DRIVE_SET_TIMEOUT] = "drive timeout",
+    [CMD_DRIVE_PULSE_EXTEND] = "pulse extend",
+    [CMD_DRIVE_PULSE_RETRACT] = "pulse retract",
     [CMD_ROTATE_LEFT]      = "rotate left",
     [CMD_ROTATE_RIGHT]     = "rotate right",
     [CMD_ROTATE_STOP]      = "rotate stop",
@@ -115,7 +135,8 @@ const char *const console_help_lines[] = {
     "  start | restart | pause | stop     sequence (Esc also stops)",
     "  safety on|off     debug on|off",
     "  drill start|stop|speed <0-100>",
-    "  drive extend|retract|stop|speed <0-100>",
+    "  drive extend|retract|stop|speed <0-100>|timeout <s>",
+    "  pulse extend|retract <ms>    arm at full power for <ms>, then stop",
     "  rotate left|right|stop|to <deg>|speed <0-100>",
     "  servo free|hold|centre|limits <min> <max>   (debug mode)",
     "  clear | redraw | help     Ctrl-L redraws, Up/Down recall",
@@ -165,8 +186,9 @@ static bool parse_int(const char *s, int32_t min, int32_t max, int32_t *out)
     return true;
 }
 
-/* Degrees with at most one decimal place -> tenths: "-2.5" -> -25. */
-static bool parse_angle(const char *s, int32_t *out)
+/* A number with at most one decimal place -> tenths: "-2.5" -> -25. Used for
+ * degrees and seconds. */
+static bool parse_tenths(const char *s, int32_t *out)
 {
     bool negative = false;
     int32_t tenths = 0;
@@ -177,7 +199,7 @@ static bool parse_angle(const char *s, int32_t *out)
     while (isdigit((unsigned char)*s)) {
         tenths = tenths * 10 + (*s++ - '0');
         if (++digits > 3)
-            return false;               /* more than 999 deg */
+            return false;               /* 1000 or more */
     }
     tenths *= 10;
     if (*s == '.') {
@@ -255,7 +277,8 @@ enum ConsoleResult console_parse(const char *line, struct Command *cmd,
 
     size_t first = (match->word2 != NULL) ? 2 : 1;      /* index of first number */
     size_t numbers = count - first;
-    size_t wanted = (match->arg == ARG_PERCENT || match->arg == ARG_ANGLE) ? 1
+    size_t wanted = (match->arg == ARG_PERCENT || match->arg == ARG_ANGLE ||
+                     match->arg == ARG_SECONDS || match->arg == ARG_MS) ? 1
                   : (match->arg == ARG_ANGLE_RANGE) ? 2 : 0;
 
     if (numbers != wanted) {
@@ -276,19 +299,35 @@ enum ConsoleResult console_parse(const char *line, struct Command *cmd,
         }
         break;
     case ARG_ANGLE:
-        if (!parse_angle(words[first], &cmd->value)) {
+        if (!parse_tenths(words[first], &cmd->value)) {
             snprintf(error, errorSize, "angle must be in degrees, like 1.5 or -2");
             return CONSOLE_ERROR;
         }
         break;
     case ARG_ANGLE_RANGE:
-        if (!parse_angle(words[first], &cmd->value) ||
-            !parse_angle(words[first + 1], &cmd->value2)) {
+        if (!parse_tenths(words[first], &cmd->value) ||
+            !parse_tenths(words[first + 1], &cmd->value2)) {
             snprintf(error, errorSize, "angles must be in degrees, like -2.5 2.5");
             return CONSOLE_ERROR;
         }
         if (cmd->value >= cmd->value2) {
             snprintf(error, errorSize, "min must be less than max");
+            return CONSOLE_ERROR;
+        }
+        break;
+    case ARG_SECONDS:
+        if (!parse_tenths(words[first], &cmd->value) ||
+            cmd->value < TIMEOUT_MIN || cmd->value > TIMEOUT_MAX) {
+            snprintf(error, errorSize, "timeout must be %d-%d seconds, like 20 or 12.5",
+                     TIMEOUT_MIN / 10, TIMEOUT_MAX / 10);
+            return CONSOLE_ERROR;
+        }
+        cmd->value *= 100;              /* tenths of a second -> ms */
+        break;
+    case ARG_MS:
+        if (!parse_int(words[first], PULSE_MIN, PULSE_MAX, &cmd->value)) {
+            snprintf(error, errorSize, "pulse must be a whole number of ms, %d-%d",
+                     PULSE_MIN, PULSE_MAX);
             return CONSOLE_ERROR;
         }
         break;
